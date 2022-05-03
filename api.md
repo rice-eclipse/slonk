@@ -302,8 +302,6 @@ A `sensor_value` message will be sent when the controller has a new set of senso
 
   * `adc` - number: The raw ADC value of the sensor channel. To convert to natural units, the dashboard must use the calibration it gave in the configuration. The reason for this is because it seems unwise to transmit floats over a channel.
 
-The ordering of each array, the lengths across multiple arrays, and the times of each array may all be different. A key with no data may either be nonexistent or be an empty array (such as with `PT_INJE` below).
-
 ```json
 {
     "message_type": "sensor_value",
