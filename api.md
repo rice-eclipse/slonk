@@ -124,7 +124,7 @@ I wouldn't recommend using this configuration - the numbers are made up and poss
             "name": "FAST",
             "standby_frequency": 200,
             "ignition_frequency": 5000,
-            "transmission_period": 100,
+            "transmission_frequency": 100,
             "sensors": [
                 {
                     "id": "LC_MAIN",
@@ -146,7 +146,7 @@ I wouldn't recommend using this configuration - the numbers are made up and poss
             "name": "SLOW",
             "standby_frequency": 10,
             "ignition_frequency": 100,
-            "transmission_period": 5,
+            "transmission_frequency": 5,
             "sensors": [
                 {
                     "id": "TC_COMB",

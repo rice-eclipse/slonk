@@ -6,7 +6,7 @@ The [previous RESFET controller software](https://github.com/rice-eclipse/resfet
 
 ## API
 
-The RESFET rewrite also includes a redesign for the API for communcations between the dashboard and controller. For further details, refer to [api.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/api.md)
+The RESFET rewrite also includes a redesign for the API for communcations between the dashboard and controller. For further details, refer to [api.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/api.md).
 
 ## Installation and dependencies
 
