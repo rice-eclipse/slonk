@@ -18,9 +18,7 @@ Communication is done between the dashboard and controller by two TCP streams (a
 
 Messages traveling in either direction will be formatted using JSON. The overarching structure of the messages will be the same across both directions, and at the top level should be a mapping containing keys with timestamps, message types, and potentially other debug information.
 
-Configuration files will also be formatted with JSON. To avoid having users use mismatched configurations, the configuration will be specified exclusively on the dashboard. During the intialization of a connection, the entire configuration file will be given to the controller as a message. This configuration file would contain hardware indices for ADCs, calibration values, burn durations, and similar.
-
-*Up for discussion*: Alternately, we make want to have this configuration file start on the controller. The benefit for having it on the dashboard is that it is more likely to make it into the "upstream" GitHub repository, as the controller is rarely connected to the Internet. However, for testing, it may be more convenient to have the configuration stored with the controller.
+Configuration files will also be formatted with JSON. To avoid having users use mismatched configurations, the configuration will be specified exclusively on the controller. During the intialization of a connection, the entire configuration file will be given to the dashboard as a message. This configuration file would contain hardware indices for ADCs, calibration values, burn durations, and similar.
 
 ## Example timeline
 
@@ -28,9 +26,9 @@ Configuration files will also be formatted with JSON. To avoid having users use 
 
 1. User enters the IP address of the controller, and then presses "Connect to Controller" or similar button on dashboard.
 
-1. Dashboard connects to the specified IP address for the controller, and transmits a message containing the complete configuration file to the controller.
+1. Dashboard connects to the specified IP address for the controller
 
-1. After receiving configuration information, the engine controller replies that it is ready to proceed. The engine controller may now begin sending periodic sensor update information to the dashboard.
+1. Controller connects to the dashboard, using the incoming connection as the source for which IP to use. Controller then transmits a configuration message immediately.
 
 1. Controller sends a series of status messages containing sensor data, and each is plotted on the dashboard.
 
@@ -239,13 +237,18 @@ Each message can be separated by an arbitrary amount of whitespace. For instance
 
 ### Dashboard to controller
 
-Messages from the dashboard to the controller may or may not be processed sequentially. For safety reasons (accepting an emergency stop during an active message),
+Messages from the dashboard to the controller may or may not be processed sequentially. For safety reasons (accepting an emergency stop during an active message), each message received will receive its own thread to process it.
 
-#### Configuration setup
+#### Ready
 
-A `configuration` message is given at the start of the conversation, as soon as the dashboard connects to the controller. This transmits
+A `ready` message is sent immediately after the controller has fully parsed a `configuration` message and is ready to accept new messages from the controller. The `ready` message has no extra fields.
 
-* `config` - object. This object should be exactly equal to the configuration object which was used at startup. Please see the configuration section for more detailed examples on what this should look like.
+```json
+{
+    "message_type": "ready",
+    "send_time": 1651355351791
+}
+```
 
 #### Driver actuation
 
@@ -281,16 +284,11 @@ Inform the controller to emergency stop. To execute an emergency stop, the contr
 
 ### Controller to dashboard
 
-#### Ready
+#### Configuration setup
 
-A `ready` message is sent immediately after the controller has fully parsed a `configuration` message and is ready to accept new commands from the dashboard. The `ready` message has no extra fields.
+A `configuration` message is given at the start of the conversation, as soon as the dashboard connects to the controller. This transmits the entire contents of the configuration file as a field of the message.
 
-```json
-{
-    "message_type": "ready",
-    "send_time": 1651355351791
-}
-```
+* `config` - object. This object should be exactly equal to the configuration object which was used at startup. Please see the configuration section for more detailed examples on what this should look like.
 
 #### Sensor value
 
