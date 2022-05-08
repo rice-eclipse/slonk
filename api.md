@@ -282,6 +282,13 @@ Inform the controller to begin an ignition immediately. The controller will then
 
 Inform the controller to emergency stop. To execute an emergency stop, the controller will halt any ongoing ignition processes and then immediately start the shutoff procedure outlined in the configuration. If an ignition is not currently active, the controller will still execute the shutdown procedure.
 
+```json
+{
+    "message_type": "emergency_stop",
+    "send_time": 1651355351791
+}
+```
+
 ### Controller to dashboard
 
 #### Configuration setup

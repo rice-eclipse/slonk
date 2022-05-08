@@ -10,7 +10,7 @@ The RESFET rewrite also includes a redesign for the API for communcations betwee
 
 ## Installation and dependencies
 
-RESFET Controller v2 is written in Rust, and uses Cargo, the main Rust build system, to
+RESFET Controller v2 is written in Rust, and uses Cargo, the main Rust build system, to build and test. We recommend using [rustup](https://rustup.rs) to set up the Rust build environment. We will list any dependencies we add here (such as for C interoperation).
 
 ## Building
 
