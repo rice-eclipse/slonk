@@ -17,3 +17,6 @@ RESFET Controller v2 is written in Rust, and uses Cargo, the main Rust build sys
 To build the release version of the code, navigate to the root directory of this repository and enter `cargo build --release`. To run the controller, either run `cargo run --release` or `./target/release/resfet_controller_2`.
 
 To run all tests, run `cargo test`.
+
+## Standard Git Procedures
+To reduce chances of version control blunders, we've created standard git procedures. Refer to [git_procedures.md] (https://github.com/rice-eclipse/resfet-controller-2/blob/master/git_procedures.md) for more details. 
