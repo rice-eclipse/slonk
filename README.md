@@ -19,4 +19,5 @@ To build the release version of the code, navigate to the root directory of this
 To run all tests, run `cargo test`.
 
 ## Standard Git Procedures
-To reduce chances of version control blunders, we've created standard git procedures. Refer to [git_procedures.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/git_procedures.md) for more details. 
+
+To reduce chances of version control blunders, we've created standard git procedures. Refer to [git_procedures.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/git_procedures.md) for more details.
