@@ -1,7 +1,7 @@
 //! Functions for handling incoming messages to the controller from the
 //! dashboard.
-use serde::{Deserialize, Serialize};
-use std::io::{Cursor, Read};
+use serde_json::Value;
+use std::io::Read;
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -9,31 +9,26 @@ use std::io::{Cursor, Read};
 /// executed.
 pub enum Command {
     /// The dashboard requested to know if the controller is ready to begin.
-    /// controller is ready to begin
     Ready,
-    /// controller to standby
-    Standby,
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// The ways in which parsing an incoming command can fail.
 pub enum ParseError {
     /// The source channel closed unexpectedly.
     SourceClosed,
     /// The message was malformed or illegal JSON.
     Malformed,
-    /// Unknown command received
-    UnknownCommand,
+    /// We received an unknown or unsupported command.
+    /// The string field is the name of the command we were asked to handle.
+    UnknownCommand(String),
     /// Other
     Other,
     /// There was an I/O error in parsing the message.
     Io(std::io::ErrorKind),
 }
-#[derive(Serialize, Deserialize)]
-struct DriverCommand {
-    driver_cmd: String,
-}
+
 impl From<std::io::Error> for ParseError {
     /// Construct an `Io` variant of `ParseError`. This allows convenient use of
     /// the question mark operator `?` for bubbling up errors.
@@ -41,32 +36,33 @@ impl From<std::io::Error> for ParseError {
         ParseError::Io(err.kind())
     }
 }
+
 impl Command {
     /// Parse an incoming stream and extract the next command.
     ///
     /// # Errors
     ///
-    /// This function will return an `Err` if the incoming message cannot be
-    /// parsed.
+    /// This function will return an `Err` in the cases described in
+    /// `ParseError`.
     ///
     /// # Panics
     ///
     /// This function will only panic in case of an internal logic error.
     pub fn parse(src: &mut dyn Read) -> Result<Command, ParseError> {
-        let mut buffer = Vec::new(); // size?
-        let mut _bytes = src.bytes();
+        let mut buffer = Vec::new();
+        let mut bytes = src.bytes();
         let mut depth = 0;
         // whether we are inside of a string literal
         let mut in_string = false;
         // whether the previous character was the escape character `\`
         let mut escaped = false;
         loop {
-            let c = _bytes.next().ok_or(ParseError::SourceClosed)??;
+            let c = bytes.next().ok_or(ParseError::SourceClosed)??;
             buffer.push(c);
             match c {
                 b'{' => {
                     if !in_string {
-                        depth += 1
+                        depth += 1;
                     }
                 }
                 b'}' => {
@@ -85,25 +81,66 @@ impl Command {
             escaped = c == b'\\' && !escaped;
         }
 
-        let data = String::from_utf8_lossy(&buffer);
-        let cmd: Result<String, _> = serde_json::from_str(&data);
-        match cmd {
-            Ok(s) => match s.as_str() {
-                "Ready" => return Ok(Command::Ready),
-                "Standby" => return Ok(Command::Standby),
-                _ => return Err(ParseError::UnknownCommand),
-            },
-            Err(_) => return Err(ParseError::UnknownCommand),
+        // convert our byte buffer to a UTF-8 string, returning an error if we
+        // fail
+        let data = String::from_utf8(buffer).map_err(|_| ParseError::Malformed)?;
+        if let Ok(Value::Object(obj)) = serde_json::from_str(&data) {
+            // we successfully extracted an object
+            match obj.get("message_type") {
+                Some(v) => {
+                    if let Value::String(cmd_name) = v {
+                        match cmd_name.as_str() {
+                            "ready" => Ok(Command::Ready),
+                            // TODO handle cases of other commands here
+                            _ => Err(ParseError::UnknownCommand(cmd_name.clone())),
+                        }
+                    } else {
+                        Err(ParseError::Malformed)
+                    }
+                }
+                None => Err(ParseError::Malformed),
+            }
+        } else {
+            // whatever we parsed, it was not a JSON object. must have been
+            // malformed
+            Err(ParseError::Malformed)
         }
     }
 }
-#[test]
-fn test_ready_command() {
-    let mut cursor = Cursor::new(
-        r#"{
-    "message_type": "Ready",
-    "send_time": 1651355351791
-}"#,
-    );
-    assert_eq!(Command::parse(&mut cursor), Ok(Command::Ready));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    /// Helper function to construct cursors and save some boilerplate on other
+    /// tests.
+    /// Creates a cursor of `message` and uses it to call `Command::parse`.
+    fn parse_helper(message: &str) -> Result<Command, ParseError> {
+        let mut cursor = Cursor::new(message);
+        Command::parse(&mut cursor)
+    }
+
+    #[test]
+    /// Test that a `Ready` command is correctly parsed.
+    fn ready() {
+        let message = r#"{
+            "message_type": "ready",
+            "send_time": 1651355351791
+        }"#;
+        assert_eq!(parse_helper(message), Ok(Command::Ready));
+    }
+
+    #[test]
+    /// Test that a command with a bad identifier cannot be parsed.
+    fn bad_command() {
+        let message = r#"{
+            "message_type": "GARBAGE",
+            "send_time": 1651355351791
+        }"#;
+        assert_eq!(
+            parse_helper(message),
+            Err(ParseError::UnknownCommand("GARBAGE".into()))
+        );
+    }
 }
