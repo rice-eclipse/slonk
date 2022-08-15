@@ -1,7 +1,7 @@
 //! Functions for handling incoming messages to the controller from the
 //! dashboard.
-use std::io::{Read, Cursor};
 use serde::{Deserialize, Serialize};
+use std::io::{Cursor, Read};
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub enum Command {
     /// The dashboard requested to know if the controller is ready to begin.
     /// controller is ready to begin
-    Ready, 
+    Ready,
     /// controller to standby
     Standby,
 }
@@ -32,7 +32,7 @@ pub enum ParseError {
 }
 #[derive(Serialize, Deserialize)]
 struct DriverCommand {
-    driver_cmd : String
+    driver_cmd: String,
 }
 impl From<std::io::Error> for ParseError {
     /// Construct an `Io` variant of `ParseError`. This allows convenient use of
@@ -64,40 +64,46 @@ impl Command {
             let c = _bytes.next().ok_or(ParseError::SourceClosed)??;
             buffer.push(c);
             match c {
-                    b'{' => if !in_string {depth += 1},
-                    b'}' => if !in_string {
+                b'{' => {
+                    if !in_string {
+                        depth += 1
+                    }
+                }
+                b'}' => {
+                    if !in_string {
                         depth -= 1;
                         // check if this is the end of the outermost object
-                        if depth == 0 { break; }
-                    },
-                    // if we encounter an unescaped backslash, toggle whether we are in a string
-                    b'"' => in_string ^= !escaped,
-                    _ => (),
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+                // if we encounter an unescaped backslash, toggle whether we are in a string
+                b'"' => in_string ^= !escaped,
+                _ => (),
             };
             escaped = c == b'\\' && !escaped;
         }
-        
+
         let data = String::from_utf8_lossy(&buffer);
-        let cmd: Result<String,_> = serde_json::from_str(&data);
+        let cmd: Result<String, _> = serde_json::from_str(&data);
         match cmd {
-            Ok(s) => {
-                match s.as_str() {
-                    "Ready" => return Ok(Command::Ready),
-                    "Standby" => return Ok(Command::Standby),
-                    _ => return Err(ParseError::UnknownCommand),
-                }
+            Ok(s) => match s.as_str() {
+                "Ready" => return Ok(Command::Ready),
+                "Standby" => return Ok(Command::Standby),
+                _ => return Err(ParseError::UnknownCommand),
             },
-            Err(_) => {
-                return Err(ParseError::UnknownCommand)
-            }
+            Err(_) => return Err(ParseError::UnknownCommand),
         }
     }
 }
 #[test]
 fn test_ready_command() {
-    let mut cursor = Cursor::new(r#"{
+    let mut cursor = Cursor::new(
+        r#"{
     "message_type": "Ready",
     "send_time": 1651355351791
-}"#);
-assert_eq!(Command::parse(&mut cursor), Ok(Command::Ready));
+}"#,
+    );
+    assert_eq!(Command::parse(&mut cursor), Ok(Command::Ready));
 }
