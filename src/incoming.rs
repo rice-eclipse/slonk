@@ -67,6 +67,11 @@ impl Command {
                 }
                 b'}' => {
                     if !in_string {
+                        if depth == 0 {
+                            // prevent underflow in the case of a message
+                            // starting with closing brace
+                            return Err(ParseError::Malformed);
+                        }
                         depth -= 1;
                         // check if this is the end of the outermost object
                         if depth == 0 {
@@ -138,5 +143,11 @@ mod tests {
             parse_helper(message),
             Err(ParseError::UnknownCommand("GARBAGE".into()))
         );
+    }
+
+    #[test]
+    /// Test that a loose closing brace will cause an error.
+    fn extraneous_closing_brace() {
+        assert_eq!(parse_helper("}{}"), Err(ParseError::Malformed));
     }
 }
