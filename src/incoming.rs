@@ -74,7 +74,7 @@ impl Command {
                         }
                     }
                 }
-                // if we encounter an unescaped backslash, toggle whether we are in a string
+                // if we encounter an unescaped quote, toggle whether we are in a string
                 b'"' => in_string ^= !escaped,
                 _ => (),
             };
@@ -86,19 +86,15 @@ impl Command {
         let data = String::from_utf8(buffer).map_err(|_| ParseError::Malformed)?;
         if let Ok(Value::Object(obj)) = serde_json::from_str(&data) {
             // we successfully extracted an object
-            match obj.get("message_type") {
-                Some(v) => {
-                    if let Value::String(cmd_name) = v {
-                        match cmd_name.as_str() {
-                            "ready" => Ok(Command::Ready),
-                            // TODO handle cases of other commands here
-                            _ => Err(ParseError::UnknownCommand(cmd_name.clone())),
-                        }
-                    } else {
-                        Err(ParseError::Malformed)
-                    }
+            // now try to extract the name of the command being requested
+            if let Some(Value::String(cmd_name)) = obj.get("message_type") {
+                match cmd_name.as_str() {
+                    "ready" => Ok(Command::Ready),
+                    // TODO handle cases of other commands here
+                    _ => Err(ParseError::UnknownCommand(cmd_name.clone())),
                 }
-                None => Err(ParseError::Malformed),
+            } else {
+                Err(ParseError::Malformed)
             }
         } else {
             // whatever we parsed, it was not a JSON object. must have been
