@@ -4,11 +4,15 @@ use std::time::Duration;
 
 /// A structure for interfacing with the MCP3208 ADC.
 ///
-/// The MCP3208 is an 8-channel SPI ADC with 12 bits of resultion, capable of
+/// The MCP3208 is an 8-channel SPI ADC with 12 bits of resolution, capable of
 /// sampling at up to 50k samples per second.
 /// It is the primary ADC used in Rice Eclipse's engine controllers.
+/// For more information, refer to the
+/// [datasheet](https://pdf1.alldatasheet.com/datasheet-pdf/view/74937/MICROCHIP/MCP3208.html).
 pub struct Mcp3208<'a> {
+    /// A string identifier for the thread which uses this ADC.
     consumer: &'a str,
+    /// The SPI device associated with this ADC.
     device: spi::Device<'a>,
 }
 
