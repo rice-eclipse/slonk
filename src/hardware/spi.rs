@@ -35,6 +35,12 @@ pub struct Device<'a> {
 }
 
 impl<'a> Device<'a> {
+    #[must_use]
+    /// Get the clock period of this device.
+    pub fn clock_period(&self) -> Duration {
+        self.bus.period
+    }
+
     /// Perform an SPI transfer operation on this device.
     /// This transfer is big-endian, that is, the most significant bit of each
     /// byte will be transferred first, and the least significant bit of each

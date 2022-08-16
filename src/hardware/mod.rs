@@ -1,5 +1,7 @@
 pub mod spi;
 
+use std::time::Duration;
+
 /// A structure for interfacing with the MCP3208 ADC.
 ///
 /// The MCP3208 is an 8-channel SPI ADC with 12 bits of resultion, capable of
@@ -14,9 +16,16 @@ impl<'a> Mcp3208<'a> {
     #[must_use]
     /// Construct a new `Mcp3208`.
     /// This will also perform all necessary initialization steps for the ADC.
-    /// For now, there is no initialization, so this function is practically a
-    /// no-op.
+    /// Additionally, sanity checks are made to ensure that the device is
+    /// correctly set up and cannot introduce extra errors.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the clock period of `device` is less than
+    /// or equal to 1.2ms, which is the minimum operating period of an MCP3208
+    /// ADC.
     pub fn new(consumer: &'a str, device: spi::Device<'a>) -> Mcp3208<'a> {
+        assert!(device.clock_period() > Duration::from_micros(1200));
         Mcp3208 { consumer, device }
     }
 
