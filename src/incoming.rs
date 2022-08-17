@@ -24,6 +24,10 @@ pub enum Command {
         /// choice).
         state: bool,
     },
+    /// The dashboard requested to begin an ignition procedure immediately.
+    Ignition,
+    /// The dashboard requested to begin an emergency stop immediately.
+    EmergencyStop,
 }
 
 #[non_exhaustive]
@@ -146,6 +150,8 @@ impl Command {
                     .as_bool()
                     .ok_or_else(ret_malformed_opt)?,
             },
+            "ignition" => Command::Ignition,
+            "emergency_stop" => Command::EmergencyStop,
             // TODO handle cases of other commands here
             _ => return Err(ParseError::UnknownCommand(cmd_name.into())),
         };
@@ -213,5 +219,25 @@ mod tests {
                 state: true
             })
         );
+    }
+
+    #[test]
+    /// Test that an ignition command is parsed correctly.
+    fn ignition() {
+        let message = r#"{
+            "message_type": "ignition",
+            "send_time": 1651355351791
+        }"#;
+        assert_eq!(parse_helper(message), Ok(Command::Ignition));
+    }
+
+    #[test]
+    /// Test that an emergency stop command is parsed correctly.
+    fn estop() {
+        let message = r#"{
+            "message_type": "emergency_stop",
+            "send_time": 1651355351791
+        }"#;
+        assert_eq!(parse_helper(message), Ok(Command::EmergencyStop));
     }
 }
