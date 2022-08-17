@@ -220,6 +220,25 @@ mod tests {
     }
 
     #[test]
+    /// Test that an `actuate` message with an identifier containing a closing
+    /// brace doesn't cause any bizarre side effects.
+    fn id_containing_closing_brace() {
+        let message = r#"{
+            "message_type": "actuate",
+            "send_time": 1651355351791,
+            "driver_id": "}}}}}{{{{{}{}{{}{}}}}}}",
+            "state": true
+        }"#;
+        assert_eq!(
+            parse_helper(message),
+            Ok(Command::Actuate {
+                id: "}}}}}{{{{{}{}{{}{}}}}}}".into(),
+                state: true
+            })
+        );
+    }
+
+    #[test]
     /// Test that an ignition command is parsed correctly.
     fn ignition() {
         let message = r#"{
