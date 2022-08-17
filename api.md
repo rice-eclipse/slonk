@@ -402,7 +402,7 @@ A `sensor_fail` error is a failed sensor read, likely due to a hardware mismatch
 {
     "message_type": "error",
     "send_time": 1651355351791,
-    "cause": "malformed",
+    "cause": "sensor_fail",
     "diagnostic": "SPI transfer for LC_MAIN failed",
     "sensor_id": "LC_MAIN"
 }

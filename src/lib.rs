@@ -1,5 +1,7 @@
 #![warn(clippy::pedantic)]
 
+pub mod outgoing;
+
 #[allow(dead_code)]
 /// The set of all states the engine controller can be in.
 pub enum ControllerState {
