@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic)]
 
+pub mod hardware;
 pub mod incoming;
 
 #[allow(dead_code)]
