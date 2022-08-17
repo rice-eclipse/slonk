@@ -96,12 +96,12 @@ impl Command {
         // convert our byte buffer to a UTF-8 string, returning an error if we
         // fail
         let data =
-            String::from_utf8(buffer.clone()).map_err(|_| ParseError::Malformed(buffer.clone()))?;
+            std::str::from_utf8(&buffer).map_err(|_| ParseError::Malformed(buffer.clone()))?;
 
         // closure which will return an error and the buffer, used for error
         // handling
         let ret_malformed_opt = || ParseError::Malformed(buffer.clone());
-        let serde_value = serde_json::from_str::<Value>(&data)
+        let serde_value = serde_json::from_str::<Value>(data)
             .map_err(|_| ParseError::Malformed(buffer.clone()))?;
         let json_obj = serde_value.as_object().ok_or_else(ret_malformed_opt)?;
         // we successfully extracted an object
