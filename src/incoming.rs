@@ -1,7 +1,10 @@
 //! Functions for handling incoming messages to the controller from the
 //! dashboard.
 use serde_json::Value;
-use std::io::Read;
+use std::{
+    io::Read,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +42,8 @@ impl From<std::io::Error> for ParseError {
 
 impl Command {
     /// Parse an incoming stream and extract the next command.
+    /// In the `Ok()` case, this will return a pair containing the command and
+    /// the instant that the command was sent.
     ///
     /// # Errors
     ///
@@ -48,7 +53,7 @@ impl Command {
     /// # Panics
     ///
     /// This function will only panic in case of an internal logic error.
-    pub fn parse(src: &mut dyn Read) -> Result<Command, ParseError> {
+    pub fn parse(src: &mut dyn Read) -> Result<(Command, SystemTime), ParseError> {
         let mut buffer = Vec::new();
         let mut bytes = src.bytes();
         let mut depth = 0;
@@ -89,23 +94,32 @@ impl Command {
         // convert our byte buffer to a UTF-8 string, returning an error if we
         // fail
         let data = String::from_utf8(buffer).map_err(|_| ParseError::Malformed)?;
-        if let Ok(Value::Object(obj)) = serde_json::from_str(&data) {
-            // we successfully extracted an object
-            // now try to extract the name of the command being requested
-            if let Some(Value::String(cmd_name)) = obj.get("message_type") {
-                match cmd_name.as_str() {
-                    "ready" => Ok(Command::Ready),
-                    // TODO handle cases of other commands here
-                    _ => Err(ParseError::UnknownCommand(cmd_name.clone())),
-                }
-            } else {
-                Err(ParseError::Malformed)
-            }
-        } else {
-            // whatever we parsed, it was not a JSON object. must have been
-            // malformed
-            Err(ParseError::Malformed)
-        }
+        let serde_value =
+            serde_json::from_str::<Value>(&data).map_err(|_| ParseError::Malformed)?;
+        let json_obj = serde_value.as_object().ok_or(ParseError::Malformed)?;
+        // we successfully extracted an object
+        // retrieve send time of command
+        let send_time_ms = json_obj
+            .get("send_time")
+            .ok_or(ParseError::Malformed)?
+            .as_u64()
+            .ok_or(ParseError::Malformed)?;
+        let send_time = UNIX_EPOCH + Duration::from_micros(send_time_ms * 1000);
+
+        // now try to extract the name of the command being requested
+        let cmd_name = json_obj
+            .get("message_type")
+            .ok_or(ParseError::Malformed)?
+            .as_str()
+            .ok_or(ParseError::Malformed)?;
+
+        let cmd = match cmd_name {
+            "ready" => Command::Ready,
+            // TODO handle cases of other commands here
+            _ => return Err(ParseError::UnknownCommand(cmd_name.into())),
+        };
+
+        Ok((cmd, send_time))
     }
 }
 
@@ -117,9 +131,10 @@ mod tests {
     /// Helper function to construct cursors and save some boilerplate on other
     /// tests.
     /// Creates a cursor of `message` and uses it to call `Command::parse`.
+    /// Ignores the extracted time from the parser.
     fn parse_helper(message: &str) -> Result<Command, ParseError> {
         let mut cursor = Cursor::new(message);
-        Command::parse(&mut cursor)
+        Command::parse(&mut cursor).map(|(cmd, _)| cmd)
     }
 
     #[test]
