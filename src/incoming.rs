@@ -43,8 +43,6 @@ pub enum ParseError {
     /// We received an unknown or unsupported command.
     /// The string field is the name of the command we were asked to handle.
     UnknownCommand(String),
-    /// Other
-    Other,
     /// There was an I/O error in parsing the message.
     Io(std::io::ErrorKind),
 }
