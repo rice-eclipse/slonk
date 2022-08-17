@@ -39,7 +39,7 @@ pub enum ParseError {
     /// The message was malformed or illegal JSON.
     /// The value inside this variant is the sequence of bytes which contained
     /// the malformed message.
-    Malformed(Vec<u8>),
+    Malformed(String),
     /// We received an unknown or unsupported command.
     /// The string field is the name of the command we were asked to handle.
     UnknownCommand(String),
@@ -90,7 +90,9 @@ impl Command {
                         if depth == 0 {
                             // prevent underflow in the case of a message
                             // starting with closing brace
-                            return Err(ParseError::Malformed(buffer.clone()));
+                            return Err(ParseError::Malformed(
+                                String::from_utf8_lossy(&buffer).to_string(),
+                            ));
                         }
                         depth -= 1;
                         // check if this is the end of the outermost object
@@ -108,14 +110,14 @@ impl Command {
 
         // convert our byte buffer to a UTF-8 string, returning an error if we
         // fail
-        let data =
-            std::str::from_utf8(&buffer).map_err(|_| ParseError::Malformed(buffer.clone()))?;
+        let data = std::str::from_utf8(&buffer)
+            .map_err(|_| ParseError::Malformed(String::from_utf8_lossy(&buffer).to_string()))?;
 
         // closure which will return an error and the buffer, used for error
         // handling
-        let ret_malformed_opt = || ParseError::Malformed(buffer.clone());
+        let ret_malformed_opt = || ParseError::Malformed(data.to_string());
         let serde_value = serde_json::from_str::<Value>(data)
-            .map_err(|_| ParseError::Malformed(buffer.clone()))?;
+            .map_err(|_| ParseError::Malformed(data.to_string()))?;
         let json_obj = serde_value.as_object().ok_or_else(ret_malformed_opt)?;
         // we successfully extracted an object
         // retrieve send time of command
@@ -198,7 +200,7 @@ mod tests {
     #[test]
     /// Test that a loose closing brace will cause an error.
     fn extraneous_closing_brace() {
-        assert_eq!(parse_helper("}{}"), Err(ParseError::Malformed(vec![b'}'])));
+        assert_eq!(parse_helper("}{}"), Err(ParseError::Malformed("}".into())));
     }
 
     #[test]

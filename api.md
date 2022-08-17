@@ -319,7 +319,7 @@ A `sensor_value` message will be sent when the controller has a new set of senso
         "LC_MAIN": {
             "time": 1651355351462,
             "adc": 125
-        },
+        }
     }
 }
 ```
@@ -352,7 +352,7 @@ A `display` message will be sent whenever the controller wishes to display a mes
 {
     "message_type": "display",
     "send_time": 3133675200,
-    "message": "The weather today is expected to be mostly sunny, with a high of 73 degrees Fahrenheit.",
+    "message": "The weather today is expected to be mostly sunny, with a high of 73 degrees Fahrenheit."
 }
 ```
 
@@ -417,6 +417,6 @@ A `permission` error is caused by a failure to acquire permission to take on som
     "message_type": "error",
     "send_time": 1651355351791,
     "cause": "permission",
-    "diagnostic": "could not write to log file `log_LC_MAIN.txt`",
+    "diagnostic": "could not write to log file `log_LC_MAIN.txt`"
 }
 ```
