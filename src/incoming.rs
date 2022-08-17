@@ -22,7 +22,9 @@ pub enum ParseError {
     /// The source channel closed unexpectedly.
     SourceClosed,
     /// The message was malformed or illegal JSON.
-    Malformed,
+    /// The value inside this variant is the sequence of bytes which contained
+    /// the malformed message.
+    Malformed(Vec<u8>),
     /// We received an unknown or unsupported command.
     /// The string field is the name of the command we were asked to handle.
     UnknownCommand(String),
@@ -75,7 +77,7 @@ impl Command {
                         if depth == 0 {
                             // prevent underflow in the case of a message
                             // starting with closing brace
-                            return Err(ParseError::Malformed);
+                            return Err(ParseError::Malformed(buffer.clone()));
                         }
                         depth -= 1;
                         // check if this is the end of the outermost object
@@ -93,25 +95,30 @@ impl Command {
 
         // convert our byte buffer to a UTF-8 string, returning an error if we
         // fail
-        let data = String::from_utf8(buffer).map_err(|_| ParseError::Malformed)?;
-        let serde_value =
-            serde_json::from_str::<Value>(&data).map_err(|_| ParseError::Malformed)?;
-        let json_obj = serde_value.as_object().ok_or(ParseError::Malformed)?;
+        let data =
+            String::from_utf8(buffer.clone()).map_err(|_| ParseError::Malformed(buffer.clone()))?;
+
+        // closure which will return an error and the buffer, used for error
+        // handling
+        let ret_malformed_opt = || ParseError::Malformed(buffer.clone());
+        let serde_value = serde_json::from_str::<Value>(&data)
+            .map_err(|_| ParseError::Malformed(buffer.clone()))?;
+        let json_obj = serde_value.as_object().ok_or_else(ret_malformed_opt)?;
         // we successfully extracted an object
         // retrieve send time of command
         let send_time_ms = json_obj
             .get("send_time")
-            .ok_or(ParseError::Malformed)?
+            .ok_or_else(ret_malformed_opt)?
             .as_u64()
-            .ok_or(ParseError::Malformed)?;
+            .ok_or_else(ret_malformed_opt)?;
         let send_time = UNIX_EPOCH + Duration::from_micros(send_time_ms * 1000);
 
         // now try to extract the name of the command being requested
         let cmd_name = json_obj
             .get("message_type")
-            .ok_or(ParseError::Malformed)?
+            .ok_or_else(ret_malformed_opt)?
             .as_str()
-            .ok_or(ParseError::Malformed)?;
+            .ok_or_else(ret_malformed_opt)?;
 
         let cmd = match cmd_name {
             "ready" => Command::Ready,
@@ -163,6 +170,6 @@ mod tests {
     #[test]
     /// Test that a loose closing brace will cause an error.
     fn extraneous_closing_brace() {
-        assert_eq!(parse_helper("}{}"), Err(ParseError::Malformed));
+        assert_eq!(parse_helper("}{}"), Err(ParseError::Malformed(vec![b'}'])));
     }
 }
