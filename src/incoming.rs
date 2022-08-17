@@ -7,12 +7,23 @@ use std::{
 };
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// A parsed command received from the controller, which is now ready to be
 /// executed.
 pub enum Command {
     /// The dashboard requested to know if the controller is ready to begin.
     Ready,
+    /// The dashboard requested that the driver be actuated to a state.
+    Actuate {
+        /// A string identifying the driver.
+        /// The controller must verify that this string is a real driver.
+        id: String,
+        /// The state that the driver must be actuated to.
+        /// `true` corresponds to powered (i.e. connected to 12V), while `false`
+        /// corresponds to unpowered (high-Z connection or grounding; dealer's
+        /// choice).
+        state: bool,
+    },
 }
 
 #[non_exhaustive]
@@ -122,6 +133,19 @@ impl Command {
 
         let cmd = match cmd_name {
             "ready" => Command::Ready,
+            "actuate" => Command::Actuate {
+                id: json_obj
+                    .get("driver_id")
+                    .ok_or_else(ret_malformed_opt)?
+                    .as_str()
+                    .ok_or_else(ret_malformed_opt)?
+                    .into(),
+                state: json_obj
+                    .get("state")
+                    .ok_or_else(ret_malformed_opt)?
+                    .as_bool()
+                    .ok_or_else(ret_malformed_opt)?,
+            },
             // TODO handle cases of other commands here
             _ => return Err(ParseError::UnknownCommand(cmd_name.into())),
         };
@@ -171,5 +195,23 @@ mod tests {
     /// Test that a loose closing brace will cause an error.
     fn extraneous_closing_brace() {
         assert_eq!(parse_helper("}{}"), Err(ParseError::Malformed(vec![b'}'])));
+    }
+
+    #[test]
+    /// Test that an `actuate` command is parsed correctly.
+    fn actuate() {
+        let message = r#"{
+            "message_type": "actuate",
+            "send_time": 1651355351791,
+            "driver_id": "OXI_FILL",
+            "state": true
+        }"#;
+        assert_eq!(
+            parse_helper(message),
+            Ok(Command::Actuate {
+                id: "OXI_FILL".into(),
+                state: true
+            })
+        );
     }
 }
