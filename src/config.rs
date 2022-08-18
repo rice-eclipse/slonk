@@ -169,6 +169,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::too_many_lines)]
+    /// Test the parsing of a full configuration string.
     fn full_config() {
         let config_str = r#"{
             "frequency_status": 10,

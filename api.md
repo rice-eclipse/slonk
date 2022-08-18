@@ -191,7 +191,7 @@ of a configuration apparent.
 
 In the following section, the keys of each message will be given as a bullet point list, followed by an example. Every message, in either direction, must have the following keys:
 
-* `message_type` - string: The identifier of the message types. Message types may not be aliased across directions (so a message of type `foo` must have the same format when from the dashboard as to when it is sent from the controller.).
+* `type` - string: The identifier of the message types. Message types may not be aliased across directions (so a message of type `foo` must have the same format when from the dashboard as to when it is sent from the controller.).
 
 * `send_time` - number: The total number of milliseconds elapsed from the UNIX epoch at the time of sending. For instance, approximately at the time of writing the number of milliseconds was 1651355351791.
 
@@ -199,7 +199,7 @@ For example:
 
 ```json
 {
-    "message_type": "foo",
+    "type": "foo",
     "send_time": 1651355351791,
     // other keys...
 }
@@ -209,13 +209,13 @@ Each message can be separated by an arbitrary amount of whitespace. For instance
 
 ```json
 {
-    "message_type": "actuate",
+    "type": "actuate",
     "send_time": 1651355351791,
     "driver_id": "OXI_FILL",
     "state": true
 }
 {
-    "message_type": "ignition",
+    "type": "ignition",
     "send_time": 1651355351791
 }
 ```
@@ -230,7 +230,7 @@ A `ready` message is sent immediately after the controller has fully parsed a `c
 
 ```json
 {
-    "message_type": "ready",
+    "type": "ready",
     "send_time": 1651355351791
 }
 ```
@@ -245,7 +245,7 @@ All driver actuation messages will have the type `actuate`.
 
 ```json
 {
-    "message_type": "actuate",
+    "type": "actuate",
     "send_time": 1651355351791,
     "driver_id": "OXI_FILL",
     "state": true
@@ -258,7 +258,7 @@ Inform the controller to begin an ignition immediately. The controller will then
 
 ```json
 {
-    "message_type": "ignition",
+    "type": "ignition",
     "send_time": 1651355351791
 }
 ```
@@ -269,7 +269,7 @@ Inform the controller to emergency stop. To execute an emergency stop, the contr
 
 ```json
 {
-    "message_type": "emergency_stop",
+    "type": "emergency_stop",
     "send_time": 1651355351791
 }
 ```
@@ -278,84 +278,119 @@ Inform the controller to emergency stop. To execute an emergency stop, the contr
 
 #### Configuration setup
 
-A `configuration` message is given at the start of the conversation, as soon as the dashboard connects to the controller. This transmits the entire contents of the configuration file as a field of the message.
+A `Configuration` message is given at the start of the conversation, as soon as 
+the dashboard connects to the controller. 
+This transmits the entire contents of the configuration file as a field of the 
+message.
 
-* `config` - object. This object should be exactly equal to the configuration object which was used at startup. Please see the configuration section for more detailed examples on what this should look like.
+* `config` - object. This object should be exactly equal to the configuration 
+    object which was used at startup. 
+    Please see the configuration section for more detailed examples on what this 
+    should look like.
 
 #### Sensor value
 
-A `sensor_value` message will be sent when the controller has a new set of sensor values to be displayed and/or logged on the dashboard. The data values are not guaranteed to be contemporaneous, in order, or from the same sensor group.
+A `SensorValue` message will be sent when the controller has a new set of sensor 
+values to be displayed and/or logged on the dashboard. 
+The data values are not guaranteed to be contemporaneous, or in order, but they 
+will be all from the same sensor group.
 
-* `data` - object: Each key in `data` corresponds to one sensor channel. The value of each key will individually be an array of objects, with the following keys:
+* `group_id` - number: The ID of the sensor group containing all sensors read 
+    for this message.
+    This ID is the index of the sensor group in the original configuration 
+    object.
 
-  * `time` - number: The number of milliseconds since the UNIX epoch when the datum was collected.
+* `readings` - array: A sequence of objects describing readings for sensors. 
+    Each sensor has the following properties:
+    
+    * `sensor_id` - number: The ID of the sensor which created the reading.
+        This ID is the index of the sensor in the sensor array in the original 
+        configuration object.
 
-  * `adc` - number: The raw ADC value of the sensor channel. To convert to natural units, the dashboard must use the calibration it gave in the configuration. The reason for this is because it seems unwise to transmit floats over a channel.
+    * `reading` - number: The raw ADC reading of the sensor.
+
+    * `time` - object: The time at which the reading was created. 
+        The time object will have the following properties:
+
+        * `secs_since_epoch` - number. The number of seconds since the UNIX 
+            epoch when the reading was created.
+
+        * `nanos_since_epoch` - number. The number of nanoseconds since the last 
+            second since the UNIX epoch.
 
 ```json
 {
-    "message_type": "sensor_value",
-    "send_time": 1651355351791,
-    "data": {
-        "PT_FEED": {
-            "time": 1651355351534,
-            "adc": 3456
-        },
-        "LC_MAIN": {
-            "time": 1651355351462,
-            "adc": 125
+    "type": "SensorValue",
+    "group_id": 0,
+    "readings": [
+        {
+            "sensor_id": 0,
+            "reading": 3456,
+            "time": {
+                "secs_since_epoch": 1651355351,
+                "nanos_since_epoch": 534000000
+            } 
         }
-    }
+    ]
 }
 ```
 
 #### Driver value
 
-A `driver_value` message will periodically sent to the dashboard at approximately the frequency specified in the `driver_status_frequency` field of the configuration. It describes the current state of all the drivers.
+A `DriverValue` message will periodically sent to the dashboard at approximately 
+the frequency specified in the `frequency_status` field of the 
+configuration. 
+It describes the current state of all the drivers.
 
-* `state` - object. A mapping from each driver's identifier to their current state, with `false` being unpowered and `true` being powered.
+* `state` - array. An array of booleans, each describing the state of one 
+    driver.
+    Each index in the `state` array corresponds to the ID of each driver, which 
+    is also its index in the original configuration object's list of drivers.
 
 ```json
 {
-    "message_type": "driver_value",
-    "send_time": 1651355351791,
-    "state": {
-        "OXI_FILL": false,
-        "ENGI_VENT": true,
-        "IGNITION": false
-    }
+    "type": "DriverValue",
+    "state": [
+        false,
+        true,
+        false
+    ]
 }
 ```
 
 #### Display
 
-A `display` message will be sent whenever the controller wishes to display a message to the user on the dashboard.
+A `Display` message will be sent whenever the controller wishes to display a 
+message to the user on the dashboard.
 
 * `message` - string: The message which will be displayed to the user.
 
 ```json
 {
-    "message_type": "display",
-    "send_time": 3133675200,
+    "type": "Display",
     "message": "The weather today is expected to be mostly sunny, with a high of 73 degrees Fahrenheit."
 }
 ```
 
 #### Error
 
-An `error` message is sent to describe an error occurring on the controller. These errors may or may not be recoverable.
+An `error` message is sent to describe an error occurring on the controller. 
+These errors may or may not be recoverable.
 
-* `cause` - string: The type of cause of the error. The subsections of this group display the possible causes, and the according keys that will be added.
+* `cause` - object: A precise cause for the error. 
+    Each `cause` object will have a field `type`, which is a string giving the 
+    type of the error (as described below).
+    Each type of error may add other fields to the cause object to provide more 
+    information.
 
-* `diagnostic` - string: A human-readable error message that can be displayed to the user.
+* `diagnostic` - string: A human-readable error message that can be displayed to 
+    the user.
 
 ```json
 {
-    "message_type": "error",
-    "send_time": 1651355351791,
-    "cause": "your error here",
+    "type": "error",
+    "cause": {},
     "diagnostic": "this is a placeholder",
-    // other keys related to this error below...
 }
 ```
 
@@ -363,17 +398,18 @@ Error message specifications below will list the other keys added to `body` depe
 
 ##### Malformed
 
-A `malformed` message will add the following keys:
+A `Malformed` message will add the following keys:
 
 * `original_message` - string: The original message sent which caused the malformed error.
 
 ```json
 {
-    "message_type": "error",
-    "send_time": 1651355351791,
-    "cause": "malformed",
+    "type": "Error",
     "diagnostic": "expected key `driver_id` not found",
-    "original_message": "{\"message_type\": \"actuate\",\"send_time\": 165135535000}"
+    "cause": {
+        "type": "Malformed",
+        "original_message": "{\"type\": \"actuate\"}"
+    }
 }
 ```
 
@@ -385,23 +421,28 @@ A `sensor_fail` error is a failed sensor read, likely due to a hardware mismatch
 
 ```json
 {
-    "message_type": "error",
-    "send_time": 1651355351791,
-    "cause": "sensor_fail",
+    "type": "Error",
     "diagnostic": "SPI transfer for LC_MAIN failed",
-    "sensor_id": "LC_MAIN"
+    "cause": {
+        "type": "SensorFail",
+        "sensor_id": 0
+    }
 }
 ```
 
 ##### Permission
 
-A `permission` error is caused by a failure to acquire permission to take on some action (such as reading from a file or interacting with hardware). Currently, the `permission` error has no other keys (but might if we run into things worth logging during implementation).
+A `Permission` error is caused by a failure to acquire permission to take on 
+some action (such as reading from a file or interacting with hardware). 
+Currently, the `Permission` error has no other keys (but might if we run into 
+things worth logging during implementation).
 
 ```json
 {
-    "message_type": "error",
-    "send_time": 1651355351791,
-    "cause": "permission",
-    "diagnostic": "could not write to log file `log_LC_MAIN.txt`"
+    "type": "Error",
+    "diagnostic": "could not write to log file `log_LC_MAIN.txt`",
+    "cause": {
+        "type": "Permission"
+    }
 }
 ```
