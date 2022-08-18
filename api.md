@@ -394,13 +394,15 @@ These errors may or may not be recoverable.
 }
 ```
 
-Error message specifications below will list the other keys added to `body` dependent on context.
+Error message specifications below will list the other keys added to `body` 
+dependent on context.
 
 ##### Malformed
 
 A `Malformed` message will add the following keys:
 
-* `original_message` - string: The original message sent which caused the malformed error.
+* `original_message` - string: The original message sent which caused the 
+    malformed error.
 
 ```json
 {
@@ -415,7 +417,10 @@ A `Malformed` message will add the following keys:
 
 ##### Failed sensor read
 
-A `sensor_fail` error is a failed sensor read, likely due to a hardware mismatch, such as if an ADC is not physically connected to the controller. We may assume that these messages are only ever sent from the controller to the dashboard.
+A `sensor_fail` error is a failed sensor read, likely due to a hardware 
+mismatch, such as if an ADC is not physically connected to the controller. 
+We may assume that these messages are only ever sent from the controller to the 
+dashboard.
 
 * `sensor_id` - string: the identifier for the sensor which failed to read.
 
