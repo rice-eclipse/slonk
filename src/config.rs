@@ -99,7 +99,7 @@ pub struct Sensor {
     pub calibration_slope: f64,
     /// The width of a rolling average for this device, used to filter data on
     /// the controller side.
-    pub rolling_average_width: u32,
+    pub rolling_average_width: Option<u32>,
     /// The ID of the ADC used by this device.
     /// This maps to the field `adc_cs` in `Configuration`.
     /// For instance, if the value of `adc` is 2, and `adc[2]` is 33, then this
@@ -114,7 +114,8 @@ pub struct Sensor {
 pub enum Error {
     /// The configuration was malformed and could not be parsed into a
     /// `Configuration`object.
-    Malformed,
+    /// A string is given describing the cause of the error.
+    Malformed(String),
     /// A sensor's definition referred to an ADC which did not exist.
     NoSuchAdc,
     /// A sensor's definition referred to a channel which is out of bounds on an
@@ -136,7 +137,7 @@ impl Configuration {
     pub fn parse(source: &mut impl Read) -> Result<Configuration, Error> {
         // deserialize the configuration
         let config: Configuration =
-            serde_json::from_reader(source).map_err(|_| Error::Malformed)?;
+            serde_json::from_reader(source).map_err(|e| Error::Malformed(e.to_string()))?;
 
         // now validate it
 
@@ -195,7 +196,6 @@ mod tests {
                             "range": [-500, 3000],
                             "calibration_intercept": 92.3,
                             "calibration_slope": -302.4,
-                            "rolling_average_width": 4,
                             "adc": 0,
                             "channel": 1
                         }
@@ -256,7 +256,7 @@ mod tests {
                         range: None,
                         calibration_intercept: 0.34,
                         calibration_slope: 33.2,
-                        rolling_average_width: 5,
+                        rolling_average_width: Some(5),
                         adc: 0,
                         channel: 0,
                     },
@@ -266,7 +266,7 @@ mod tests {
                         range: Some((-500., 3000.)),
                         calibration_intercept: 92.3,
                         calibration_slope: -302.4,
-                        rolling_average_width: 4,
+                        rolling_average_width: None,
                         adc: 0,
                         channel: 1,
                     },
