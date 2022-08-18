@@ -17,6 +17,10 @@ pub struct Mcp3208<'a> {
 }
 
 impl<'a> Mcp3208<'a> {
+    /// The minimum frequency at which the SPI clock can operate for the MCP3208
+    /// to work correctly.
+    pub const SPI_MIN_FREQUENCY: u64 = 10_000;
+
     #[must_use]
     /// Construct a new `Mcp3208`.
     /// This will also perform all necessary initialization steps for the ADC.
@@ -29,7 +33,9 @@ impl<'a> Mcp3208<'a> {
     /// or equal to 1.2ms, which is the minimum operating period of an MCP3208
     /// ADC.
     pub fn new(consumer: &'a str, device: spi::Device<'a>) -> Mcp3208<'a> {
-        assert!(device.clock_period() > Duration::from_micros(1200));
+        assert!(
+            device.clock_period() > Duration::from_micros(1_000_000 / Mcp3208::SPI_MIN_FREQUENCY)
+        );
         Mcp3208 { consumer, device }
     }
 

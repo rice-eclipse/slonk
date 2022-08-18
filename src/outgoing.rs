@@ -8,6 +8,8 @@ use std::{
 
 use serde::{ser::SerializeMap, Serialize, Serializer};
 
+use crate::config::Configuration;
+
 /// The set of messages which can be sent from the controller to the dashboard.
 pub enum Message<'a> {
     /// A configuration message.
@@ -16,7 +18,7 @@ pub enum Message<'a> {
     ///
     /// TODO: Do not use a string here, and instead use a configuration struct
     /// we make ourselves.
-    Config(&'a str),
+    Config(&'a Configuration),
     /// A sensor valuation message.
     /// Each key in the map corresponds to a sensor.
     /// Each value corresponds to a time at which a sensor value was taken and

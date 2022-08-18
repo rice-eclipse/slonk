@@ -38,43 +38,48 @@ Configuration files will also be formatted with JSON. To avoid having users use 
 
 ## Configuration
 
-A configuration file contains all the information necessary to set up an entire test. The file will declare a family of sensors and drivers, and also outline the ignition procedure. The fields of the main configuration object are as follows:
+A configuration file contains all the information necessary to set up an entire test. The file will declare a family of sensors and drivers, and also outline the ignition procedure. The fields of the main configuration object are as follows:* 
 
-* `drivers` - array: A list describing each driver, giving each a unique identifier (which will later be referred to during ignition).
-
-* `driver_status_frequency` - number: The number of times (per second) to attempt to send driver status update messages.
+* `frequency_status` - number: The number of times (per second) to attempt to send driver status update messages.
 
 * `sensor_groups` - array: A list describing each set of sensors and the threads that manage them. It will also include calibration information.
 
+* `drivers` - array: A list describing each driver, giving each a unique identifier (which will later be referred to during ignition).
+
 * `ignition_sequence` - array: A list of objects describing each sequential operation to be taken during the ignition sequence.
 
-* `shutoff_sequence` - array: A list of objects describing each sequential operation to be taken during the shutoff sequence.
+* `estop_sequence` - array: A list of objects describing each sequential operation to be taken during the shutoff sequence.
 
 ### Sensors
 
 Each sensor group (each being an element of the `sensor_groups` field) is an object with the following fields:
 
-* `name` - string: The name of the sensor group. May not be shared between two distinct sensor groups.
+* `label` - string: The name of the sensor group. May not be shared between two distinct sensor groups.
 
-* `standby_frequency` - number: The number of times, per second, to sample all the sensors in the sensor group *outside* of ingition procedures.
+* `frequency_standby` - number: The number of times, per second, to sample all the sensors in the sensor group *outside* of ingition procedures.
 
-* `ignition_frequency` - number: The number of times, per second, to sample all the sensors in the sensor group during the ignition procedure.
+* `frequency_ignition` - number: The number of times, per second, to sample all the sensors in the sensor group during the ignition procedure.
 
-* `transmission_frequency` - number: An upper bound on the number of times per second a sensor value update will be sent to the dashboard. If the transmission frequency is greater than the active sampling frequency (either standby or ignition), messages will be sent on a time scale according to how often they were sampled.
+* `frequency_transmission` - number: An upper bound on the number of times per second a sensor value update will be sent to the dashboard. If the transmission frequency is greater than the active sampling frequency (either standby or ignition), messages will be sent on a time scale according to how often they were sampled.
 
 * `sensors` - array: The set of sensors. Each sensor will be an object containing the following keys:
 
-  * `id` - string: The unique identifier for the sensor. May not be shared across sensor groups.
-
-  * `calibration_intercept` - number: The linear offset for calibrating the sensors. For a calibration scheme of type `y = mx + b`, `calibration_intercept` is `b`.
-
-  * `calibration_slope` - number: The slope of the linear calibration for the sensors. For a calibration scheme of type `y = mx + b`, `calibration_slope` is `m`.
+  * `label` - string: The unique identifier for the sensor. May not be shared across sensor groups.
 
   * `units` - string: The units of the sensor's calibrated value.
 
   * `range` (optional) - array of numbers: The legal range which the calibrated sensor value can be during the ignition process. If the field `rolling_average_width` is given, the rolling average value will be compared against the range. If the value is not within the range during ignition, then the ignition will immediately halt and the shutoff will begin.
 
+  * `calibration_intercept` - number: The linear offset for calibrating the sensors. For a calibration scheme of type `y = mx + b`, `calibration_intercept` is `b`.
+
+  * `calibration_slope` - number: The slope of the linear calibration for the sensors. For a calibration scheme of type `y = mx + b`, `calibration_slope` is `m`.
+
   * `rolling_average_width` (optional) - number: The number of samples to be combined in a rolling average to be used for validating a range. The rolling average will not be used anywhere other than range validation, and will not be stored in the logs. The reason for this is because the rolling average is only needed to eliminate high-frequency noise from a range detection.
+
+  * `adc` - number: the ID of the ADC (as specified in `adc_cs` of the root 
+    configuration object) to be used for measuring this sensor.
+
+  * `channel` - number: the ADC channel which this sensor measures.
 
 *Up for discussion*: allow for different calibration modes than just a linear one?
 
@@ -82,9 +87,11 @@ Each sensor group (each being an element of the `sensor_groups` field) is an obj
 
 `ignition_sequence` maps to an array of objects which each identify one "step" in the ignition process. A step is an object, and has the following field:
 
-* `operation` - string: A string describing the operation to take on. The operation may be either `actuate` or `sleep`.
+* `type` - string: A string describing the operation to take on. The operation may be either `Actuate` or `Sleep`.
 
-A `sleep` operation has only one extra field, `duration`, which is the number in milliseconds of how long to delay.
+A `Sleep` operation has only one extra field, `duration`, which is an object 
+with fields `secs` and `nanos` describing the length of the duration in seconds 
+and nanoseconds.
 
 An `actuate` operation has two extra fields:
 
@@ -96,108 +103,86 @@ During the ignition procedure, the controller will execute each step in the igni
 
 ### Emergency shutoff sequence
 
-`shutoff_sequence` maps to an array of steps, just like `ignition_sequence`. The steps that can be performed in a shutoff sequence are identical to those that can be performed during ignition.
+`estop_sequence` maps to an array of steps, just like `ignition_sequence`. 
+The steps that can be performed in a shutoff sequence are identical to those 
+that can be performed during ignition.
 
 ### Sample configuration
 
-I wouldn't recommend using this configuration - the numbers are made up and possibly could cause serious issues. However, it makes the syntax and structure of a configuration apparent.
+I wouldn't recommend using this configuration - the numbers are made up and 
+possibly could cause serious issues. However, it makes the syntax and structure 
+of a configuration apparent.
 
 ```json
 {
-    "drivers": [
-        {
-            "id": "OXI_FILL",
-            "default_on": false,
-            "pin": 33
-        },
-        {
-            "id": "IGNITION",
-            "default_on": false,
-            "pin": 36
-        }
-    ],
-    "driver_status_frequency": 10,
+    "frequency_status": 10,
     "sensor_groups": [
         {
-            "name": "FAST",
-            "standby_frequency": 200,
-            "ignition_frequency": 5000,
-            "transmission_frequency": 100,
+            "label": "FAST",
+            "frequency_standby": 10,
+            "frequency_ignition": 1000,
+            "frequency_transmission": 10,
             "sensors": [
                 {
-                    "id": "LC_MAIN",
-                    "calibration_intercept": -304.38,
-                    "calibration_slope": 0.4321,
-                    "units": "lb"
+                    "label": "LC_MAIN",
+                    "units": "lb",
+                    "calibration_intercept": 0.34,
+                    "calibration_slope": 33.2,
+                    "rolling_average_width": 5,
+                    "adc": 0,
+                    "channel": 0
                 },
                 {
-                    "id": "PT_COMB",
-                    "calibration_intercept": 1158.6,
-                    "calibration_slope": -0.3113,
+                    "label": "PT_FEED",
                     "units": "psi",
-                    "range": [0, 900],
-                    "rolling_average_width": 15
+                    "range": [-500, 3000],
+                    "calibration_intercept": 92.3,
+                    "calibration_slope": -302.4,
+                    "rolling_average_width": 4,
+                    "adc": 0,
+                    "channel": 1
                 }
             ]
-        },
+        }
+    ],
+    "drivers": [
         {
-            "name": "SLOW",
-            "standby_frequency": 10,
-            "ignition_frequency": 100,
-            "transmission_frequency": 5,
-            "sensors": [
-                {
-                    "id": "TC_COMB",
-                    "calibration_intercept": -304.38,
-                    "calibration_slope": 0.4321,
-                    "units": "lb"
-                },
-                {
-                    "id": "PT_INJE",
-                    "calibration_intercept": 1158.6,
-                    "calibration_slope": -0.3113,
-                    "units": "psi"
-                }
-            ]
-        },
+            "label": "OXI_FILL",
+            "pin": 33
+        }
     ],
     "ignition_sequence": [
         {
-            "operation": "actuate",
-            "driver_id": "OXI_FILL",
+            "type": "Actuate",
+            "driver_id": 0,
             "state": true
         },
         {
-            "operation": "actuate",
-            "driver_id": "IGNITION",
-            "state": true
+            "type": "Sleep",
+            "duration": {
+                "secs": 10,
+                "nanos": 0
+            }
         },
         {
-            "operation": "sleep",
-            "duration": 10000
-        },
-        {
-            "operation": "actuate",
-            "driver_id": "OXI_FILL",
-            "state": false
-        },
-        {
-            "operation": "actuate",
-            "driver_id": "IGNITION",
+            "type": "Actuate",
+            "driver_id": 0,
             "state": false
         }
     ],
-    "shutoff_sequence": [
+    "estop_sequence": [
         {
-            "operation": "actuate",
-            "driver_id": "OXI_FILL",
-            "state": false
-        },
-        {
-            "operation": "actuate",
-            "driver_id": "IGNITION",
+            "type": "Actuate",
+            "driver_id": 0,
             "state": false
         }
+    ],
+    "spi_mosi": 26,
+    "spi_miso": 27,
+    "spi_clk": 28,
+    "spi_frequency_clk": 50000,
+    "adc_cs": [
+        37
     ]
 }
 ```
