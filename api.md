@@ -1,80 +1,141 @@
 # RESFET Rewrite API Proposal
 
-Since we're rewriting the engine controller, we might as well rewrite the API. This proposal outlines a new API for RESFET's replacement, moving away from the RESFET's opaque, implementation-dependent approach.
+Since we're rewriting the engine controller, we might as well rewrite the API. 
+This proposal outlines a new API for RESFET's replacement, moving away from the 
+RESFET's opaque, implementation-dependent approach.
 
 ## Terms
 
-* *Dashboard*: the device running RESFET Dashboard. Acts as a client to the controller.
+* *Dashboard*: the device running RESFET Dashboard. Acts as a client to the 
+    controller.
 
-* *Controller*: the device running the replacement for RESFET Engine Controller, or whatever we call it.
+* *Controller*: the device running the replacement for RESFET Engine Controller, 
+    or whatever we call it.
 
-* *Sensor*: For the sake of this API, a "sensor" is anything that can be read from an ADC and has a calibration. If, in the future, we decide to interface with sensors by means other than an ADC, we may change this definition (and, accordingly, how the configuration setup works).
+* *Sensor*: For the sake of this API, a "sensor" is anything that can be read 
+    from an ADC and has a calibration. 
+    If, in the future, we decide to interface with sensors by means other than 
+    an ADC, we may change this definition (and, accordingly, how the 
+    configuration setup works).
 
-* *Sensor group*: A sensor group is a set of sensors which are sampled at the same rate and will be handled by the same thread to reduce overhead.
+* *Sensor group*: A sensor group is a set of sensors which are sampled at the 
+    same rate and will be handled by the same thread to reduce overhead.
 
 ## At a glance
 
-Communication is done between the dashboard and controller by two TCP streams (as opposed to UDP, as before). The key reason is that there's little performance justification for just randomly losing datapoints in the stream. Across these channels, both the controller and dashboard can send messages to each other.
+Communication is done between the dashboard and controller by two TCP streams 
+(as opposed to UDP, as before). 
+The key reason is that there's little performance justification for just 
+randomly losing datapoints in the stream. 
+Across these channels, both the controller and dashboard can send messages to 
+each other.
 
-Messages traveling in either direction will be formatted using JSON. The overarching structure of the messages will be the same across both directions, and at the top level should be a mapping containing keys with timestamps, message types, and potentially other debug information.
+Messages traveling in either direction will be formatted using JSON. 
+The overarching structure of the messages will be the same across both 
+directions, and at the top level should be a mapping containing keys with 
+timestamps, message types, and potentially other debug information.
 
-Configuration files will also be formatted with JSON. To avoid having users use mismatched configurations, the configuration will be specified exclusively on the controller. During the intialization of a connection, the entire configuration file will be given to the dashboard as a message. This configuration file would contain hardware indices for ADCs, calibration values, burn durations, and similar.
+Configuration files will also be formatted with JSON. To avoid having users use 
+mismatched configurations, the configuration will be specified exclusively on 
+the controller. 
+During the intialization of a connection, the entire configuration file will be 
+given to the dashboard as a message. This configuration file would contain 
+hardware indices for ADCs, calibration values, burn durations, and similar.
 
 ## Example timeline
 
-1. Controller and dashboard both start, and begin listening for an incoming connection on their respective TCP servers.
+1. Controller and dashboard both start, and begin listening for an incoming 
+    connection on their respective TCP servers.
 
-1. User enters the IP address of the controller, and then presses "Connect to Controller" or similar button on dashboard.
+1. User enters the IP address of the controller, and then presses "Connect to 
+    Controller" or similar button on dashboard.
 
-1. Dashboard connects to the specified IP address for the controller
+1. Dashboard connects to the specified IP address for the controller.
 
-1. Controller connects to the dashboard, using the incoming connection as the source for which IP to use. Controller then transmits a configuration message immediately.
+1. Controller connects to the dashboard, using the incoming connection as the 
+    source for which IP to use. 
+    Controller then transmits a configuration message immediately.
 
-1. Controller sends a series of status messages containing sensor data, and each is plotted on the dashboard.
+1. Controller sends a series of status messages containing sensor data, and each 
+    is plotted on the dashboard.
 
-1. User begins an ignition sequence. Ignition start message is sent to controller.
+1. User begins an ignition sequence. 
+    Ignition start message is sent to controller.
 
 1. Controller completes ignition process.
 
 ## Configuration
 
-A configuration file contains all the information necessary to set up an entire test. The file will declare a family of sensors and drivers, and also outline the ignition procedure. The fields of the main configuration object are as follows:* 
+A configuration file contains all the information necessary to set up an entire 
+test. 
+The file will declare a family of sensors and drivers, and also outline the 
+ignition procedure. 
+The fields of the main configuration object are as follows:
 
-* `frequency_status` - number: The number of times (per second) to attempt to send driver status update messages.
+* `frequency_status` - number: The number of times (per second) to attempt to 
+    send driver status update messages.
 
-* `sensor_groups` - array: A list describing each set of sensors and the threads that manage them. It will also include calibration information.
+* `sensor_groups` - array: A list describing each set of sensors and the threads 
+    that manage them. It will also include calibration information.
 
-* `drivers` - array: A list describing each driver, giving each a unique identifier (which will later be referred to during ignition).
+* `drivers` - array: A list describing each driver, giving each a unique 
+    identifier (which will later be referred to during ignition).
 
-* `ignition_sequence` - array: A list of objects describing each sequential operation to be taken during the ignition sequence.
+* `ignition_sequence` - array: A list of objects describing each sequential 
+    operation to be taken during the ignition sequence.
 
-* `estop_sequence` - array: A list of objects describing each sequential operation to be taken during the shutoff sequence.
+* `estop_sequence` - array: A list of objects describing each sequential 
+    operation to be taken during the shutoff sequence.
 
 ### Sensors
 
-Each sensor group (each being an element of the `sensor_groups` field) is an object with the following fields:
+Each sensor group (each being an element of the `sensor_groups` field) is an 
+object with the following fields:
 
-* `label` - string: The name of the sensor group. May not be shared between two distinct sensor groups.
+* `label` - string: The name of the sensor group. 
+    May not be shared between two distinct sensor groups.
 
-* `frequency_standby` - number: The number of times, per second, to sample all the sensors in the sensor group *outside* of ingition procedures.
+* `frequency_standby` - number: The number of times, per second, to sample all 
+    the sensors in the sensor group *outside* of ingition procedures.
 
-* `frequency_ignition` - number: The number of times, per second, to sample all the sensors in the sensor group during the ignition procedure.
+* `frequency_ignition` - number: The number of times, per second, to sample all 
+    the sensors in the sensor group during the ignition procedure.
 
-* `frequency_transmission` - number: An upper bound on the number of times per second a sensor value update will be sent to the dashboard. If the transmission frequency is greater than the active sampling frequency (either standby or ignition), messages will be sent on a time scale according to how often they were sampled.
+* `frequency_transmission` - number: An upper bound on the number of times per 
+    second a sensor value update will be sent to the dashboard. 
+    If the transmission frequency is greater than the active sampling frequency 
+    (either standby or ignition), messages will be sent on a time scale 
+    according to how often they were sampled.
 
-* `sensors` - array: The set of sensors. Each sensor will be an object containing the following keys:
+* `sensors` - array: The set of sensors. Each sensor will be an object 
+    containing the following keys:
 
-  * `label` - string: The unique identifier for the sensor. May not be shared across sensor groups.
+  * `label` - string: The unique identifier for the sensor. 
+    May not be shared across sensor groups.
 
   * `units` - string: The units of the sensor's calibrated value.
 
-  * `range` (optional) - array of numbers: The legal range which the calibrated sensor value can be during the ignition process. If the field `rolling_average_width` is given, the rolling average value will be compared against the range. If the value is not within the range during ignition, then the ignition will immediately halt and the shutoff will begin.
+  * `range` (optional) - array of numbers: The legal range which the calibrated 
+    sensor value can be during the ignition process. 
+    The rolling average value will be compared against the range. 
+    If the value is not within the range during ignition, then the ignition will 
+    immediately halt and the shutoff will begin.
 
-  * `calibration_intercept` - number: The linear offset for calibrating the sensors. For a calibration scheme of type `y = mx + b`, `calibration_intercept` is `b`.
+  * `calibration_intercept` - number: The linear offset for calibrating the 
+    sensors. 
+    For a calibration scheme of type `y = mx + b`, `calibration_intercept` is
+    `b`.
 
-  * `calibration_slope` - number: The slope of the linear calibration for the sensors. For a calibration scheme of type `y = mx + b`, `calibration_slope` is `m`.
+  * `calibration_slope` - number: The slope of the linear calibration for the 
+    sensors. 
+    For a calibration scheme of type `y = mx + b`, `calibration_slope` is `m`.
 
-  * `rolling_average_width` (optional) - number: The number of samples to be combined in a rolling average to be used for validating a range. The rolling average will not be used anywhere other than range validation, and will not be stored in the logs. The reason for this is because the rolling average is only needed to eliminate high-frequency noise from a range detection.
+  * `rolling_average_width` number: The number of samples to be combined in a 
+    rolling average to be used for validating a range. 
+    The rolling average will not be used anywhere other than range validation, 
+    and will not be stored in the logs. 
+    The reason for this is because the rolling average is only needed to 
+    eliminate high-frequency noise from a range detection.
 
   * `adc` - number: the ID of the ADC (as specified in `adc_cs` of the root 
     configuration object) to be used for measuring this sensor.
@@ -85,9 +146,12 @@ Each sensor group (each being an element of the `sensor_groups` field) is an obj
 
 ### Ignition sequence
 
-`ignition_sequence` maps to an array of objects which each identify one "step" in the ignition process. A step is an object, and has the following field:
+`ignition_sequence` maps to an array of objects which each identify one "step" 
+in the ignition process. 
+A step is an object, and has the following field:
 
-* `type` - string: A string describing the operation to take on. The operation may be either `Actuate` or `Sleep`.
+* `type` - string: A string describing the operation to take on. 
+    The operation may be either `Actuate` or `Sleep`.
 
 A `Sleep` operation has only one extra field, `duration`, which is an object 
 with fields `secs` and `nanos` describing the length of the duration in seconds 
@@ -97,9 +161,11 @@ An `actuate` operation has two extra fields:
 
 * `driver_id` - string: The identifier for the driver to be actuated.
 
-* `state` - boolean: The state the driver should be actuated to (`true` for electrically powered and `false` for unpowered).
+* `state` - boolean: The state the driver should be actuated to (`true` for 
+    electrically powered and `false` for unpowered).
 
-During the ignition procedure, the controller will execute each step in the ignition sequence configuration in order.
+During the ignition procedure, the controller will execute each step in the 
+ignition sequence configuration in order.
 
 ### Emergency shutoff sequence
 
