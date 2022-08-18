@@ -189,88 +189,101 @@ of a configuration apparent.
 
 ## Message specification
 
-In the following section, the keys of each message will be given as a bullet point list, followed by an example. Every message, in either direction, must have the following keys:
+In the following section, the keys of each message will be given as a bullet 
+point list, followed by an example. 
+Every message, in either direction, must have the following keys:
 
-* `type` - string: The identifier of the message types. Message types may not be aliased across directions (so a message of type `foo` must have the same format when from the dashboard as to when it is sent from the controller.).
-
-* `send_time` - number: The total number of milliseconds elapsed from the UNIX epoch at the time of sending. For instance, approximately at the time of writing the number of milliseconds was 1651355351791.
+* `type` - string: The identifier of the message types. 
 
 For example:
 
 ```json
 {
-    "type": "foo",
-    "send_time": 1651355351791,
+    "type": "Foo",
     // other keys...
 }
 ```
 
-Each message can be separated by an arbitrary amount of whitespace. For instance, the following would be a legal sequence of messages for the controller to receive from the dashboard:
+Each message can be separated by an arbitrary amount of whitespace. 
+For instance, the following would be a legal sequence of messages for the 
+controller to receive from the dashboard:
 
 ```json
 {
-    "type": "actuate",
-    "send_time": 1651355351791,
-    "driver_id": "OXI_FILL",
+    "type": "Actuate",
+    "driver_id": 0,
     "state": true
 }
 {
-    "type": "ignition",
-    "send_time": 1651355351791
+    "type": "Ignition",
 }
 ```
 
 ### Dashboard to controller
 
-Messages from the dashboard to the controller may or may not be processed sequentially. For safety reasons (accepting an emergency stop during an active message), each message received will receive its own thread to process it.
+Messages from the dashboard to the controller may or may not be processed 
+sequentially. 
+For safety reasons (accepting an emergency stop during an active message), each 
+message received will receive its own thread to process it.
 
 #### Ready
 
-A `ready` message is sent immediately after the controller has fully parsed a `configuration` message and is ready to accept new messages from the controller. The `ready` message has no extra fields.
+A `Ready` message is sent immediately after the controller has fully parsed a 
+`Configuration` message and is ready to accept new messages from the controller. 
+The `ready` message has no extra fields.
 
 ```json
 {
-    "type": "ready",
-    "send_time": 1651355351791
+    "type": "Ready"
 }
 ```
 
 #### Driver actuation
 
-All driver actuation messages will have the type `actuate`.
+All driver actuation messages will have the type `Actuate`.
 
-* `driver_id` - string: The unique string identifier of the driver. For example, it could be "OXI_FILL".
+* `driver_id` - number: The ID of the driver to be actuated. 
+    This ID is equal to the index of the driver in the original configuration 
+    object.
 
-* `state` - boolean: If `true`, the driver should be actuated to its electrically-powered state. If `false`, the driver should be deactuated to its unpowered state. If the driver state was already in the desired state, sending this message would result in a silent no-op.
+* `state` - boolean: The state that the driver should be actuated to.
+    If `true`, the driver should be actuated to its electrically-powered state. 
+    If `false`, the driver should be deactuated to its unpowered state. 
+    If the driver state was already in the desired state, sending this message 
+    would result in a silent no-op.
 
 ```json
 {
-    "type": "actuate",
-    "send_time": 1651355351791,
-    "driver_id": "OXI_FILL",
+    "type": "Actuate",
+    "driver_id": 0,
     "state": true
 }
 ```
 
 #### Ignition start
 
-Inform the controller to begin an ignition immediately. The controller will then actuate all valves according to the ignition procedure outlined in the configuration setup.
+Inform the controller to begin an ignition immediately. 
+The controller will then actuate all valves according to the ignition procedure 
+outlined in the configuration setup.
 
 ```json
 {
-    "type": "ignition",
-    "send_time": 1651355351791
+    "type": "Ignition"
 }
 ```
 
 #### Emergency stop
 
-Inform the controller to emergency stop. To execute an emergency stop, the controller will halt any ongoing ignition processes and then immediately start the shutoff procedure outlined in the configuration. If an ignition is not currently active, the controller will still execute the shutdown procedure.
+Inform the controller to emergency stop. 
+To execute an emergency stop, the controller will halt any ongoing ignition 
+processes and then immediately start the shutoff procedure outlined in the 
+configuration. 
+If an ignition is not currently active, the controller will still execute the 
+shutdown procedure.
 
 ```json
 {
-    "type": "emergency_stop",
-    "send_time": 1651355351791
+    "type": "EmergencyStop"
 }
 ```
 
