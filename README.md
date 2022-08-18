@@ -21,14 +21,34 @@ This documnent also explains the structure of configuration files.
 
 ## Installation and dependencies
 
-RESFET Controller v2 is written in Rust, and uses Cargo, the main Rust build system, to build and test. We recommend using [rustup](https://rustup.rs) to set up the Rust build environment. We will list any dependencies we add here (such as for C interoperation).
+RESFET Controller v2 is written in Rust, and uses Cargo, the main Rust build 
+system, to build and test. 
+We recommend using [rustup](https://rustup.rs) to set up the Rust build 
+environment. 
+We will list any non-Cargo dependencies we add here (such as for C 
+interoperation).
 
 ## Building
 
-To build the release version of the code, navigate to the root directory of this repository and enter `cargo build --release`. To run the controller, either run `cargo run --release` or `./target/release/resfet_controller_2`.
+To build the release version of the code, navigate to the root directory of this 
+repository and enter `cargo build --release`. 
+To run the controller, either run `cargo run --release` or 
+`./target/release/resfet_controller_2` after building.
+
+The controller executable takes one argument, which is the path to a 
+configuration file. An example command to run using the Titan engine 
+configuration is the following:
+
+```sh
+cargo run --release config/titan.json
+```
 
 To run all tests, run `cargo test`.
 
 ## Standard Git Procedures
 
-To reduce chances of version control blunders, we've created standard git procedures. Refer to [git_procedures.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/git_procedures.md) for more details.
+To reduce chances of version control blunders, we've created standard git 
+procedures. 
+Refer to 
+[git_procedures.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/git_procedures.md) 
+for more details.
