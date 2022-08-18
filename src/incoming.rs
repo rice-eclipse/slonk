@@ -29,8 +29,7 @@ pub enum Command {
 }
 
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq, Deserialize)]
-#[serde(tag = "type")]
+#[derive(Debug, PartialEq, Eq)]
 /// The ways in which parsing an incoming command can fail.
 pub enum ParseError {
     /// The source channel closed unexpectedly.
@@ -40,14 +39,15 @@ pub enum ParseError {
     /// the malformed message.
     Malformed(String),
     /// There was an I/O error in parsing the message.
-    Io,
+    Io(std::io::ErrorKind),
 }
 
 impl From<std::io::Error> for ParseError {
-    /// Construct an `Io` variant of `ParseError`. This allows convenient use of
-    /// the question mark operator `?` for bubbling up errors.
-    fn from(_: std::io::Error) -> Self {
-        ParseError::Io
+    /// Construct an `Io` variant of `ParseError`.
+    /// This allows convenient use of the question mark operator `?` for
+    /// bubbling up errors.
+    fn from(err: std::io::Error) -> Self {
+        ParseError::Io(err.kind())
     }
 }
 
@@ -97,7 +97,8 @@ impl Command {
                         }
                     }
                 }
-                // if we encounter an unescaped quote, toggle whether we are in a string
+                // if we encounter an unescaped quote, toggle whether we are in
+                // a string
                 b'"' => in_string ^= !escaped,
                 _ => (),
             };

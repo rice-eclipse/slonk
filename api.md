@@ -142,7 +142,8 @@ object with the following fields:
 
   * `channel` - number: the ADC channel which this sensor measures.
 
-*Up for discussion*: allow for different calibration modes than just a linear one?
+*Up for discussion*: allow for different calibration modes than just a linear 
+one?
 
 ### Ignition sequence
 
