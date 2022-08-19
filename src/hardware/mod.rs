@@ -2,6 +2,29 @@ pub mod spi;
 
 use std::time::Duration;
 
+use crate::ControllerError;
+
+/// A generic trait for an ADC (Analog-to-Digital Converter).
+///
+/// This is primarily used for dependency injection testing in other parts of
+/// the engine controller.
+pub trait Adc {
+    /// Perform an ADC read.
+    ///
+    /// # Inputs
+    ///
+    /// * `consumer`: A string describing the thread, process, or caller which
+    ///     is using this device.
+    /// * `channel`: The channel (in the case of a multi-channel ADC) to be read
+    ///     from.
+    ///
+    /// # Errors
+    ///
+    /// This function can return any error as described in the definition of
+    /// `ControllerError`.
+    fn read(&self, consumer: &str, channel: u8) -> Result<u16, ControllerError>;
+}
+
 /// A structure for interfacing with the MCP3208 ADC.
 ///
 /// The MCP3208 is an 8-channel SPI ADC with 12 bits of resolution, capable of
@@ -36,7 +59,9 @@ impl<'a> Mcp3208<'a> {
         );
         Mcp3208 { device }
     }
+}
 
+impl Adc for Mcp3208<'_> {
     /// Perform an ADC read on channel `channel`. Returns the raw 12-bit ADC
     /// reading of the channel on the device.
     ///
@@ -51,7 +76,7 @@ impl<'a> Mcp3208<'a> {
     ///
     /// This function will return an error if something goes wrong with GPIO.
     /// For more information, check the documentation in `gpio_cdev`.
-    pub fn read(&self, consumer: &str, channel: u8) -> Result<u16, gpio_cdev::Error> {
+    fn read(&self, consumer: &str, channel: u8) -> Result<u16, ControllerError> {
         assert!((0..8).contains(&channel));
 
         // We send two "high" bits, and then the channel ID to tell the ADC to

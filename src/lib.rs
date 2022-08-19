@@ -3,6 +3,7 @@
 use std::sync::PoisonError;
 
 pub mod config;
+pub mod execution;
 pub mod hardware;
 pub mod incoming;
 pub mod outgoing;

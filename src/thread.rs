@@ -3,13 +3,14 @@
 use std::{
     io::Write,
     sync::{Mutex, RwLock},
-    thread::sleep,
+    thread::{sleep, Scope},
     time::{Duration, SystemTime},
 };
 
 use crate::{
     config::Configuration,
-    hardware::Mcp3208,
+    execution::emergency_stop,
+    hardware::Adc,
     outgoing::{Message, SensorReading},
     ControllerError, ControllerState,
 };
@@ -20,18 +21,20 @@ use crate::{
 ///
 /// # Inputs
 ///
+/// * `thread_scope`: A reference to a scope that this function can use to spawn
+///     other threads.
+///     This is required so that the sensor listener thread can emergency-stop,
+///     if needed.
 /// * `group_id`: The ID of the sensor group that this thread is responsible
 ///     for.
 ///     This is equal to the index of the sensor group in the configuration
 ///     object.
-/// * `bus`: The SPI bus which the ADCs for this sensor group are on.
-/// * `chip`: The GPIO chip to be used for actuating chip select pins for each
-///     ADC.
+/// * `adcs`: The set of ADCs which can be read from by the sensors.
 /// * `configuration`: The primary configuration of the controller.
 /// * `state`: The state of the whole system.
 ///     If a sensor enters an invalid value during ignition, this thread will
 ///     automatically update the state as needed.
-/// * `dashboard_stream`:
+/// * `dashboard_stream`: A stream where messages can be sent to the dashboard.
 ///
 /// # Panics
 ///
@@ -40,9 +43,10 @@ use crate::{
 /// * If the value of `group_id` does not correspond to an existing sensor
 ///     group.
 fn sensor_listen<'a>(
+    thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
-    configuration: &Configuration,
-    adcs: &[Mcp3208],
+    configuration: &'a Configuration,
+    adcs: &[impl Adc],
     state: &'a RwLock<ControllerState>,
     dashboard_stream: &'a Mutex<Option<impl Write>>,
 ) -> Result<(), ControllerError> {
@@ -54,6 +58,21 @@ fn sensor_listen<'a>(
     let last_transmission_time = SystemTime::now();
     // most recent values read, to be sent to the dashboard
     let mut most_recent_readings: Vec<Option<(SystemTime, u16)>> = vec![None; group.sensors.len()];
+    // Rolling average values for sensor readings.
+    let mut rolling_averages: Vec<f64> = group
+        .sensors
+        .iter()
+        .map(|sensor| {
+            // extract the middle value of the range to seed our rolling
+            // average so that the sensor doesn't immediately start in a "bad"
+            // spot
+            if let Some((min, max)) = sensor.range {
+                (min + max) / 2.0
+            } else {
+                0.0
+            }
+        })
+        .collect();
 
     let standby_period = Duration::from_secs(1) / group.frequency_standby;
     let ignition_period = Duration::from_secs(1) / group.frequency_ignition;
@@ -67,6 +86,24 @@ fn sensor_listen<'a>(
             let reading = adcs[usize::from(sensor.adc)].read(&consumer_name, sensor.channel)?;
             let read_time = SystemTime::now();
             most_recent_readings[idx] = Some((read_time, reading));
+
+            // update rolling averages
+            let width = sensor.rolling_average_width.unwrap_or(1);
+            let calibrated_value =
+                f64::from(reading) * sensor.calibration_slope + sensor.calibration_intercept;
+            let rolling_avg = (rolling_averages[idx] * (f64::from(width - 1)) + calibrated_value)
+                / f64::from(width);
+            rolling_averages[idx] = rolling_avg;
+
+            // if rolling average went out of bounds, immediately start
+            // emergency stopping
+            if let Some((min, max)) = sensor.range {
+                if rolling_avg < min || max < rolling_avg {
+                    // oh no! a sensor is now in an illegal range!
+                    // spin up another thread to emergency stop
+                    thread_scope.spawn(|| emergency_stop(configuration, state));
+                }
+            }
         }
 
         // transmit data to the dashboard if it's been long enough since our
