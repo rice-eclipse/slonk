@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
 
-use std::sync::PoisonError;
+use std::sync::{PoisonError, RwLock};
 
 pub mod config;
 pub mod execution;
@@ -9,6 +9,14 @@ pub mod incoming;
 pub mod outgoing;
 pub mod thread;
 
+/// A guard for controller state which can be used to notify other threads of
+/// changes to controller state.
+pub struct StateGuard {
+    /// The current state.
+    state: RwLock<ControllerState>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// The set of all states the engine controller can be in.
 pub enum ControllerState {
     /// The engine is in standby - passively logging and awating commands.
@@ -56,6 +64,85 @@ pub enum ControllerError {
     Configuration(config::Error),
     /// The user gave the wrong input arguments to the main executable.
     Args,
+    /// An illegal state transition was attempted.
+    /// This is often a sign of a critical internal logic error.
+    IllegalTransition {
+        /// The state that was transitioned from.
+        from: ControllerState,
+        /// The state that the transition was attempted to be made to.
+        to: ControllerState,
+    },
+}
+
+impl StateGuard {
+    #[must_use]
+    /// Construct a new `StateGuard`.
+    /// Initializes its state to the value of `state`.
+    pub fn new(state: ControllerState) -> StateGuard {
+        StateGuard {
+            state: RwLock::new(state),
+        }
+    }
+
+    /// Get the status of this guard.
+    /// This operation is blocking.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err(Controller::Poison)` in the case that the internal
+    /// lock of this guard is poisoned.
+    pub fn status(&self) -> Result<ControllerState, ControllerError> {
+        Ok(*self.state.read()?)
+    }
+
+    /// Move this guard into a new state.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an `Err(ControllerError::Poison)` in the case
+    /// that an internal lock is poisoned.
+    /// If `new_state` is not reachable from the current state, an
+    /// `Err(ControllerError::IllegalTransition)` will be returned.
+    pub fn move_to(&self, new_state: ControllerState) -> Result<(), ControllerError> {
+        let mut write_guard = self.state.write()?;
+        let old_state = *write_guard;
+
+        // determine whether the transition is valid
+        let valid_transition = match new_state {
+            ControllerState::Standby => {
+                old_state == ControllerState::EStopping || old_state == ControllerState::PostIgnite
+            }
+            ControllerState::PreIgnite => old_state == ControllerState::Standby,
+            ControllerState::Ignite => old_state == ControllerState::PreIgnite,
+            ControllerState::PostIgnite => old_state == ControllerState::PostIgnite,
+            ControllerState::EStopping => true,
+        };
+
+        if !valid_transition {
+            return Err(ControllerError::IllegalTransition {
+                from: old_state,
+                to: new_state,
+            });
+        }
+
+        *write_guard = new_state;
+        Ok(())
+    }
+}
+
+/// The set of errors that can be caused from working with a `StateGuard`.
+pub enum GuardError {
+    /// The guard's lock was poisoned. This implies a panicked thread owned a
+    /// lock.
+    Poison,
+    /// An illegal transition was attempted.
+    IllegalTransition,
+}
+
+impl<T> From<PoisonError<T>> for GuardError {
+    fn from(_: PoisonError<T>) -> Self {
+        GuardError::Poison
+    }
 }
 
 impl<T> From<PoisonError<T>> for ControllerError {

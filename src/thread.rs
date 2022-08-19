@@ -2,7 +2,7 @@
 
 use std::{
     io::Write,
-    sync::{Mutex, RwLock},
+    sync::Mutex,
     thread::{sleep, Scope},
     time::{Duration, SystemTime},
 };
@@ -12,7 +12,7 @@ use crate::{
     execution::emergency_stop,
     hardware::Adc,
     outgoing::{Message, SensorReading},
-    ControllerError, ControllerState,
+    ControllerError, ControllerState, StateGuard,
 };
 
 #[allow(dead_code)]
@@ -47,7 +47,7 @@ fn sensor_listen<'a>(
     group_id: u8,
     configuration: &'a Configuration,
     adcs: &[impl Adc],
-    state: &'a RwLock<ControllerState>,
+    state: &'a StateGuard,
     dashboard_stream: &'a Mutex<Option<impl Write>>,
 ) -> Result<(), ControllerError> {
     assert!(usize::from(group_id) < configuration.sensor_groups.len());
@@ -138,8 +138,7 @@ fn sensor_listen<'a>(
         // loop.
         // standby means we are sampling slowly, and anything else means we
         // sample quickly.
-        let state_guard = state.read()?;
-        let sleep_time = match &*state_guard {
+        let sleep_time = match state.status()? {
             ControllerState::Standby => standby_period,
             _ => ignition_period,
         };
