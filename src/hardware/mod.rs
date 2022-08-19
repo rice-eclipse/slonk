@@ -10,8 +10,6 @@ use std::time::Duration;
 /// For more information, refer to the
 /// [datasheet](https://pdf1.alldatasheet.com/datasheet-pdf/view/74937/MICROCHIP/MCP3208.html).
 pub struct Mcp3208<'a> {
-    /// A string identifier for the thread which uses this ADC.
-    consumer: &'a str,
     /// The SPI device associated with this ADC.
     device: spi::Device<'a>,
 }
@@ -32,11 +30,11 @@ impl<'a> Mcp3208<'a> {
     /// This function will panic if the clock period of `device` is less than
     /// or equal to 1.2ms, which is the minimum operating period of an MCP3208
     /// ADC.
-    pub fn new(consumer: &'a str, device: spi::Device<'a>) -> Mcp3208<'a> {
+    pub fn new(device: spi::Device<'a>) -> Mcp3208<'a> {
         assert!(
             device.clock_period() > Duration::from_micros(1_000_000 / Mcp3208::SPI_MIN_FREQUENCY)
         );
-        Mcp3208 { consumer, device }
+        Mcp3208 { device }
     }
 
     /// Perform an ADC read on channel `channel`. Returns the raw 12-bit ADC
@@ -53,7 +51,7 @@ impl<'a> Mcp3208<'a> {
     ///
     /// This function will return an error if something goes wrong with GPIO.
     /// For more information, check the documentation in `gpio_cdev`.
-    pub fn read(&self, channel: u8) -> Result<u16, gpio_cdev::Error> {
+    pub fn read(&self, consumer: &str, channel: u8) -> Result<u16, gpio_cdev::Error> {
         assert!((0..8).contains(&channel));
 
         // We send two "high" bits, and then the channel ID to tell the ADC to
@@ -66,8 +64,7 @@ impl<'a> Mcp3208<'a> {
         assert_eq!(outgoing.len(), incoming.len());
 
         // perform an SPI transfer
-        self.device
-            .transfer(self.consumer, &outgoing, &mut incoming)?;
+        self.device.transfer(consumer, &outgoing, &mut incoming)?;
 
         // the back two bytes of `incoming` now have our data in big endian
         // representation.
