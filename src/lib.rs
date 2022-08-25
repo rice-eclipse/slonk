@@ -42,6 +42,11 @@ pub enum ControllerState {
     /// Data logging should be fast, since anything that is worth e-stopping
     /// over is probably very interesting.
     EStopping,
+    /// The engine controller is shutting down.
+    /// This state can only be reached from the `Standby` state.
+    /// During this state, each thread will "wrap up" its work and then exit as
+    /// soon as possible.
+    Quit,
 }
 
 #[non_exhaustive]
@@ -112,7 +117,9 @@ impl StateGuard {
             ControllerState::Standby => {
                 old_state == ControllerState::EStopping || old_state == ControllerState::PostIgnite
             }
-            ControllerState::PreIgnite => old_state == ControllerState::Standby,
+            ControllerState::PreIgnite | ControllerState::Quit => {
+                old_state == ControllerState::Standby
+            }
             ControllerState::Ignite => old_state == ControllerState::PreIgnite,
             ControllerState::PostIgnite => old_state == ControllerState::PostIgnite,
             ControllerState::EStopping => true,

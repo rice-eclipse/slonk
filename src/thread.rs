@@ -55,7 +55,7 @@ fn sensor_listen<'a>(
     // more convenient access to our sensor group data
     let group = &configuration.sensor_groups[usize::from(group_id)];
     // the last time that we sent a sensor status update
-    let last_transmission_time = SystemTime::now();
+    let mut last_transmission_time = SystemTime::now();
     // most recent values read, to be sent to the dashboard
     let mut most_recent_readings: Vec<Option<(SystemTime, u16)>> = vec![None; group.sensors.len()];
     // Rolling average values for sensor readings.
@@ -80,7 +80,7 @@ fn sensor_listen<'a>(
 
     let consumer_name = format!("sensor_listener_{}", group_id);
 
-    loop {
+    while state.status()? != ControllerState::Quit {
         // read from each device
         for (idx, sensor) in group.sensors.iter().enumerate() {
             let reading = adcs[usize::from(sensor.adc)].read(&consumer_name, sensor.channel)?;
@@ -131,6 +131,7 @@ fn sensor_listen<'a>(
                 )?;
             }
 
+            last_transmission_time = SystemTime::now();
             most_recent_readings = vec![None; group.sensors.len()];
         }
 
@@ -145,5 +146,81 @@ fn sensor_listen<'a>(
 
         // now take a nap until we next need to get data
         sleep(sleep_time);
+    }
+
+    // we are now quitting
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{io::Cursor, thread::scope};
+
+    use super::*;
+
+    /// Dummy ADC structure for testing.
+    struct ReturnsNumber(u16);
+
+    impl Adc for ReturnsNumber {
+        fn read(&self, _: &str, _: u8) -> Result<u16, crate::ControllerError> {
+            Ok(self.0)
+        }
+    }
+
+    #[test]
+    fn data_written() {
+        let config = r#"{
+            "frequency_status": 10,
+            "sensor_groups": [
+                {
+                    "label": "dummy",
+                    "frequency_standby": 10,
+                    "frequency_ignition": 10,
+                    "frequency_transmission": 10,
+                    "sensors": [
+                        {
+                            "label": "dummy_sensor0",
+                            "units": "mops",
+                            "calibration_intercept": 0,
+                            "calibration_slope": 0,
+                            "adc": 0,
+                            "channel": 0
+                        },
+                        {
+                            "label": "dummy_sensor2",
+                            "units": "mops",
+                            "calibration_intercept": 0,
+                            "calibration_slope": 0,
+                            "adc": 1,
+                            "channel": 0
+                        }
+                    ]
+                }
+            ],
+            "drivers": [],
+            "ignition_sequence": [],
+            "estop_sequence": [],
+            "spi_mosi": 0,
+            "spi_miso": 0,
+            "spi_clk": 0,
+            "spi_frequency_clk": 50000,
+            "adc_cs": [0, 0, 0]
+        }"#;
+        let adcs: Vec<ReturnsNumber> = (0..3).map(ReturnsNumber).collect();
+        let mut cfg_cursor = Cursor::new(config);
+        let config = Configuration::parse(&mut cfg_cursor).unwrap();
+        let state = StateGuard::new(ControllerState::Standby);
+        let output_stream = Mutex::new(Some(Vec::new()));
+        scope(|s| {
+            let handle = s.spawn(|| sensor_listen(s, 0, &config, &adcs, &state, &output_stream));
+            sleep(Duration::from_millis(500));
+            state.move_to(ControllerState::Quit).unwrap();
+            handle.join().unwrap().unwrap();
+        });
+
+        let output_str =
+            String::from_utf8(output_stream.lock().unwrap().as_ref().unwrap().clone()).unwrap();
+
+        println!("{output_str}");
     }
 }
