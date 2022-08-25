@@ -169,6 +169,8 @@ mod tests {
 
     #[test]
     fn data_written() {
+        // create some dummy configuration for the sensor listener thread to
+        // read
         let config = r#"{
             "frequency_status": 10,
             "sensor_groups": [
@@ -187,7 +189,7 @@ mod tests {
                             "channel": 0
                         },
                         {
-                            "label": "dummy_sensor2",
+                            "label": "dummy_sensor1",
                             "units": "mops",
                             "calibration_intercept": 0,
                             "calibration_slope": 0,
@@ -204,17 +206,26 @@ mod tests {
             "spi_miso": 0,
             "spi_clk": 0,
             "spi_frequency_clk": 50000,
-            "adc_cs": [0, 0, 0]
+            "adc_cs": [0, 0]
         }"#;
-        let adcs: Vec<ReturnsNumber> = (0..3).map(ReturnsNumber).collect();
+        let adcs: Vec<ReturnsNumber> = (0..2).map(ReturnsNumber).collect();
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
         let state = StateGuard::new(ControllerState::Standby);
         let output_stream = Mutex::new(Some(Vec::new()));
+
+        // actual magic happens here
         scope(|s| {
+            // spawn a sensor listener thread and let it do its thing
             let handle = s.spawn(|| sensor_listen(s, 0, &config, &adcs, &state, &output_stream));
+
+            // give the thread some time
             sleep(Duration::from_millis(500));
+
+            // notify the thread to die
             state.move_to(ControllerState::Quit).unwrap();
+
+            // collect the thread's return value
             handle.join().unwrap().unwrap();
         });
 
