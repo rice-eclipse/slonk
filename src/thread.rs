@@ -156,6 +156,8 @@ fn sensor_listen<'a>(
 mod tests {
     use std::{io::Cursor, thread::scope};
 
+    use serde_json::Value;
+
     use super::*;
 
     /// Dummy ADC structure for testing.
@@ -219,8 +221,8 @@ mod tests {
             // spawn a sensor listener thread and let it do its thing
             let handle = s.spawn(|| sensor_listen(s, 0, &config, &adcs, &state, &output_stream));
 
-            // give the thread some time
-            sleep(Duration::from_millis(500));
+            // give the thread enough time to read exactly one value
+            sleep(Duration::from_millis(150));
 
             // notify the thread to die
             state.move_to(ControllerState::Quit).unwrap();
@@ -229,9 +231,36 @@ mod tests {
             handle.join().unwrap().unwrap();
         });
 
-        let output_str =
-            String::from_utf8(output_stream.lock().unwrap().as_ref().unwrap().clone()).unwrap();
+        // validate the one sensor reading that was sent to our dummy dashboard
 
-        println!("{output_str}");
+        let json_val: Value =
+            serde_json::from_slice(output_stream.lock().unwrap().as_deref().unwrap()).unwrap();
+
+        let json_obj = json_val.as_object().unwrap();
+
+        assert_eq!(
+            json_obj.get("type").unwrap().as_str().unwrap(),
+            "SensorValue"
+        );
+
+        assert_eq!(json_obj.get("group_id").unwrap().as_u64().unwrap(), 0);
+
+        // extract group ids and reading values
+        let readings: Vec<(u64, u64)> = json_obj
+            .get("readings")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|val| val.as_object().unwrap())
+            .map(|obj| {
+                (
+                    obj.get("sensor_id").unwrap().as_u64().unwrap(),
+                    obj.get("reading").unwrap().as_u64().unwrap(),
+                )
+            })
+            .collect();
+
+        assert_eq!(readings, [(0, 0), (1, 1)]);
     }
 }
