@@ -25,6 +25,9 @@ pub fn emergency_stop(
 
     perform_actions(&configuration.estop_sequence)?;
 
+    // done doing the estop sequence, move back to standby
+    state.move_to(ControllerState::Standby)?;
+
     Ok(())
 }
 
