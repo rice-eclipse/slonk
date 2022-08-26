@@ -19,7 +19,8 @@ pub fn emergency_stop(
     // transition to EStop, and if it's already in EStopping, don't interfere
     let transition_result = state.move_to(ControllerState::EStopping);
     match transition_result {
-        Ok(_) | Err(ControllerError::IllegalTransition { from: _, to: _ }) => (),
+        Ok(_) => (),
+        Err(ControllerError::IllegalTransition { from: _, to: _ }) => return Ok(()),
         err => return err,
     };
 
