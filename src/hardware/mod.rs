@@ -1,3 +1,8 @@
+//! Definitions for hardware devices.
+//!
+//! The goal of this module is to abstract away some of the details of exactly
+//! how our hardware works so that we can focus on the business logic elsewhere.
+
 pub mod spi;
 
 use std::time::Duration;

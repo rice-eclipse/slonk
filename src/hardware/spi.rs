@@ -1,4 +1,4 @@
-//! Structures and tools for interfacing via SPI.
+//! Structures and tools for interfacing via Serial Peripheral Interface (SPI).
 
 use std::{thread::sleep, time::Duration};
 

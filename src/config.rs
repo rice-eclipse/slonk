@@ -1,3 +1,5 @@
+//! Loading and validating configurations for the engine controller.
+
 use std::{io::Read, time::Duration};
 
 use serde::{Deserialize, Serialize};
