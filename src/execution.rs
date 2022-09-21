@@ -11,7 +11,7 @@ use crate::{
 ///
 /// # Errors
 ///
-/// This function may return an `Error` due to thread poisoning or failed GPIO.
+/// This function may return an `Err` due to thread poisoning or failed GPIO.
 pub fn emergency_stop(
     configuration: &Configuration,
     state: &StateGuard,
