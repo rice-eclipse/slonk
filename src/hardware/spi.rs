@@ -2,7 +2,7 @@
 
 use std::{thread::sleep, time::Duration};
 
-use gpio_cdev::{Line, LineRequestFlags};
+use gpio_cdev::{Chip, Line, LineRequestFlags};
 
 /// An SPI bus.
 /// This structure contains enough information to talk on SPI, but contains no
@@ -35,6 +35,19 @@ pub struct Device<'a> {
 }
 
 impl<'a> Device<'a> {
+    /// Construct a new device, registering its line with the OS.
+    ///
+    /// # Errors
+    ///
+    /// This function may return an error if we are unable to acquire the line
+    /// from the OS.
+    pub fn new(bus: &'a Bus, chip: &mut Chip, pin: u8) -> Result<Device<'a>, gpio_cdev::Error> {
+        Ok(Device {
+            bus,
+            pin_cs: chip.get_line(u32::from(pin))?,
+        })
+    }
+
     #[must_use]
     /// Get the clock period of this device.
     pub fn clock_period(&self) -> Duration {

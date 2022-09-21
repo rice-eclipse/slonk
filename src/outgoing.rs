@@ -24,7 +24,7 @@ pub enum Message<'a> {
         /// The group which generated the readings.
         group_id: u8,
         /// The readings which were created.
-        readings: Vec<SensorReading>,
+        readings: &'a [SensorReading],
     },
     /// A driver state message.
     /// Describes the state of the drivers on the controller.
@@ -52,11 +52,11 @@ pub enum Message<'a> {
 /// An individual reading on a sensor.
 pub struct SensorReading {
     /// The ID of the sensor withing the group that created this reading.
-    sensor_id: u8,
+    pub sensor_id: u8,
     /// The value read on the sensor.
-    reading: u16,
+    pub reading: u16,
     /// The time at which the sensor reading was created.
-    time: SystemTime,
+    pub time: SystemTime,
 }
 
 #[derive(Serialize)]
@@ -118,7 +118,7 @@ mod tests {
             }"#,
             &Message::SensorValue {
                 group_id: 0,
-                readings: vec![SensorReading {
+                readings: &[SensorReading {
                     sensor_id: 0,
                     reading: 3456,
                     time: SystemTime::UNIX_EPOCH + Duration::from_millis(1_651_355_351_534),
