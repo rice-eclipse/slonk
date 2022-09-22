@@ -75,6 +75,9 @@ The fields of the main configuration object are as follows:
 - `frequency_status` - number: The number of times (per second) to attempt to
   send driver status update messages.
 
+- `frequency_logging` - number: The number of times (per second) to save sensor
+  data to the log files.
+
 - `sensor_groups` - array: A list describing each set of sensors and the threads
   that manage them. It will also include calibration information.
 
