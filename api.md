@@ -75,6 +75,9 @@ The fields of the main configuration object are as follows:
 - `frequency_status` - number: The number of times (per second) to attempt to
   send driver status update messages.
 
+- `log_buffer_size` - number: The size of each log buffer.
+  When a log buffer is full, its data will be flushed into a log file.
+
 - `sensor_groups` - array: A list describing each set of sensors and the threads
   that manage them. It will also include calibration information.
 
@@ -183,7 +186,7 @@ of a configuration apparent.
 ```json
 {
   "frequency_status": 10,
-  "frequency_logging": 100,
+  "log_buffer_size": 256,
   "sensor_groups": [
     {
       "label": "FAST",
