@@ -61,16 +61,19 @@ fn sensor_listen<'a>(
     let group = &configuration.sensor_groups[usize::from(group_id)];
     // the last time that we sent a sensor status update
     let mut last_transmission_time = SystemTime::now();
-    // the last time that we wrote to the log files
-    let mut last_log_time = SystemTime::now();
 
-    // most recent values read, to be sent to the dashboard and logged.
-    // the external bool is whether the most recent reading in the queue has
-    // already been sent to the dashboard.
+    // the most recent reading from each sensor which has *not* already been
+    // sent to the dashboard.
+    // each element will be None if the most recent reading was sent to the
+    // dashboard.
+    let mut transmission_readings: Vec<Option<(SystemTime, u16)>> = vec![None; group.sensors.len()];
+
+    // most recent values read, to be logged.
     // in each queue, the "back" contains the most recent readings and the
     // "front" contains the oldest ones.
-    let mut most_recent_readings: Vec<(bool, VecDeque<(SystemTime, u16)>)> =
-        vec![(false, VecDeque::new()); group.sensors.len()];
+    let mut most_recent_readings: Vec<VecDeque<(SystemTime, u16)>> =
+        vec![VecDeque::new(); group.sensors.len()];
+
     // Rolling average values for sensor readings.
     let mut rolling_averages: Vec<f64> = group
         .sensors
@@ -90,7 +93,6 @@ fn sensor_listen<'a>(
     let standby_period = Duration::from_secs(1) / group.frequency_standby;
     let ignition_period = Duration::from_secs(1) / group.frequency_ignition;
     let transmission_period = Duration::from_secs(1) / group.frequency_transmission;
-    let log_period = Duration::from_secs(1) / configuration.frequency_logging;
 
     let consumer_name = format!("sensor_listener_{}", group_id);
 
@@ -99,9 +101,8 @@ fn sensor_listen<'a>(
         for (idx, sensor) in group.sensors.iter().enumerate() {
             let reading = adcs[usize::from(sensor.adc)].read(&consumer_name, sensor.channel)?;
             let read_time = SystemTime::now();
-            most_recent_readings[idx].0 = false;
-            most_recent_readings[idx].1.push_back((read_time, reading));
-
+            most_recent_readings[idx].push_back((read_time, reading));
+            transmission_readings[idx] = Some((read_time, reading));
             // update rolling averages
             let width = sensor.rolling_average_width.unwrap_or(1);
             let calibrated_value =
@@ -130,20 +131,16 @@ fn sensor_listen<'a>(
                     // some iterator hackery to get things in the right shape
                     &Message::SensorValue {
                         group_id,
-                        readings: &most_recent_readings
+                        readings: &transmission_readings
                             .iter()
                             .enumerate()
-                            .filter_map(|(sensor_id, (was_sent, deque))| {
-                                if *was_sent {
-                                    None
-                                } else {
-                                    #[allow(clippy::cast_possible_truncation)]
-                                    deque.back().map(|&(time, reading)| SensorReading {
-                                        sensor_id: sensor_id as u8,
-                                        reading,
-                                        time,
-                                    })
-                                }
+                            .filter_map(|(sensor_id, opt)| {
+                                #[allow(clippy::cast_possible_truncation)]
+                                opt.map(|(time, reading)| SensorReading {
+                                    sensor_id: sensor_id as u8,
+                                    reading,
+                                    time,
+                                })
                             })
                             .collect::<Vec<_>>(),
                     },
@@ -151,20 +148,13 @@ fn sensor_listen<'a>(
             }
 
             last_transmission_time = SystemTime::now();
-            for (ref mut sent, _) in &mut most_recent_readings {
-                // mark all most recent readings as beeing created
-                *sent = true;
-            }
+            transmission_readings = vec![None; group.sensors.len()];
         }
 
-        if state.status()? != ControllerState::Standby
-            && SystemTime::now() > last_log_time + log_period
-        {
-            for (sensor_id, (_, reading_queue)) in most_recent_readings.iter().enumerate() {
+        for (sensor_id, reading_queue) in most_recent_readings.iter().enumerate() {
+            if reading_queue.len() >= configuration.log_buffer_size {
                 write_sensor_log(&mut log_files[sensor_id], reading_queue)?;
             }
-
-            last_log_time = SystemTime::now();
         }
 
         // use the system state to determine how long to sleep until the next
@@ -258,7 +248,7 @@ mod tests {
         // read
         let config = r#"{
             "frequency_status": 10,
-            "frequency_logging": 100,
+            "log_buffer_size": 1,
             "sensor_groups": [
                 {
                     "label": "dummy",
@@ -305,7 +295,6 @@ mod tests {
         scope(|s| {
             // move to a state where logging occurs so we can verify that
             // logging is correct
-            state.move_to(ControllerState::PreIgnite).unwrap();
 
             // spawn a sensor listener thread and let it do its thing
             let handle =
@@ -316,8 +305,6 @@ mod tests {
 
             // notify the thread to die
             // hackery to make a valid state transition sequence
-            state.move_to(ControllerState::EStopping).unwrap();
-            state.move_to(ControllerState::Standby).unwrap();
             state.move_to(ControllerState::Quit).unwrap();
             println!("joining...");
 
@@ -355,6 +342,9 @@ mod tests {
             })
             .collect();
 
+        assert_eq!(readings, [(0, 0), (1, 1)]);
+
+        // check that log information was generated correctly
         let logged_strings: Vec<String> = logs
             .into_iter()
             .map(|cursor| String::from_utf8(cursor.into_inner()).unwrap())
@@ -370,9 +360,8 @@ mod tests {
             // check that sensor readings got written in the right columns
             assert_eq!(tokens[1], format!("{idx}").as_str());
             assert_eq!(tokens[3], format!("{idx}").as_str());
-            assert_eq!(tokens[4], "");
+            assert_eq!(tokens[5], format!("{idx}").as_str());
+            assert_eq!(tokens[6], "");
         }
-
-        assert_eq!(readings, [(0, 0), (1, 1)]);
     }
 }
