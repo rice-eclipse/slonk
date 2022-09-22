@@ -1,5 +1,6 @@
 {
     "frequency_status": 10,
+    "frequency_logging": 100,
     "sensor_groups": [
         {
             "label": "TC",

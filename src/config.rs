@@ -14,6 +14,9 @@ pub struct Configuration {
     /// The frequency at which driver and system status updates should be sent
     /// to the dashboard.
     pub frequency_status: u32,
+    /// The frequency at which logs should be written to file.
+    /// Under most circumstances, this should not be more than ~10-100Hz.
+    pub frequency_logging: u32,
     /// The families of sensors, each having their own frequencies and manager
     /// threads.
     pub sensor_groups: Vec<SensorGroup>,
@@ -176,6 +179,7 @@ mod tests {
     fn full_config() {
         let config_str = r#"{
             "frequency_status": 10,
+            "frequency_logging": 100,
             "sensor_groups": [
                 {
                     "label": "FAST",
@@ -246,6 +250,7 @@ mod tests {
         }"#;
         let config = Configuration {
             frequency_status: 10,
+            frequency_logging: 100,
             sensor_groups: vec![SensorGroup {
                 label: "FAST".into(),
                 frequency_standby: 10,
