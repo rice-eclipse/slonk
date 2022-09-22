@@ -32,6 +32,8 @@ use crate::{
 ///     object.
 /// * `adcs`: The set of ADCs which can be read from by the sensors.
 /// * `configuration`: The primary configuration of the controller.
+/// * `log_files`: Handles for log files associated with the sensors in this
+///     sensor group. Each index corresponds exactly to its associated index in the group.
 /// * `state`: The state of the whole system.
 ///     If a sensor enters an invalid value during ignition, this thread will
 ///     automatically update the state as needed.
@@ -43,6 +45,7 @@ use crate::{
 ///
 /// * If the value of `group_id` does not correspond to an existing sensor
 ///     group.
+/// * If the current system time is before the UNIX epoch.
 fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
