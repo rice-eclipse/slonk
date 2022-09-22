@@ -157,7 +157,9 @@ fn sensor_listen<'a>(
             }
         }
 
-        if SystemTime::now() > last_log_time + log_period {
+        if state.status()? != ControllerState::Standby
+            && SystemTime::now() > last_log_time + log_period
+        {
             for (sensor_id, (_, reading_queue)) in most_recent_readings.iter().enumerate() {
                 write_sensor_log(&mut log_files[sensor_id], reading_queue)?;
             }
@@ -301,6 +303,10 @@ mod tests {
 
         // actual magic happens here
         scope(|s| {
+            // move to a state where logging occurs so we can verify that
+            // logging is correct
+            state.move_to(ControllerState::PreIgnite).unwrap();
+
             // spawn a sensor listener thread and let it do its thing
             let handle =
                 s.spawn(|| sensor_listen(s, 0, &config, &mut logs, &adcs, &state, &output_stream));
@@ -309,7 +315,11 @@ mod tests {
             sleep(Duration::from_millis(150));
 
             // notify the thread to die
+            // hackery to make a valid state transition sequence
+            state.move_to(ControllerState::EStopping).unwrap();
+            state.move_to(ControllerState::Standby).unwrap();
             state.move_to(ControllerState::Quit).unwrap();
+            println!("joining...");
 
             // collect the thread's return value
             handle.join().unwrap().unwrap();
