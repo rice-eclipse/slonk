@@ -54,7 +54,7 @@ use crate::{
 /// * If the value of `group_id` does not correspond to an existing sensor
 ///     group.
 /// * If the current system time is before the UNIX epoch.
-fn sensor_listen<'a>(
+pub fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
     configuration: &'a Configuration,

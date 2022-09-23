@@ -1,6 +1,6 @@
 use std::{
     fs::{create_dir, create_dir_all, File},
-    io::{BufReader, Write},
+    io::BufReader,
     path::PathBuf,
     sync::Mutex,
 };
@@ -38,20 +38,22 @@ fn main() -> Result<(), ControllerError> {
 
     // create path to log files directory
     create_dir_all(&logs_path)?;
+    println!("Created directory {logs_path}");
 
     let mut sensor_log_files: Vec<Vec<File>> = Vec::new();
     for sensor_group in &config.sensor_groups {
         let mut group_files = Vec::new();
-        let sensor_group_path = PathBuf::from_iter(&[logs_path, "/", &sensor_group.label]);
+        let sensor_group_path = PathBuf::from_iter(&[logs_path, &sensor_group.label]);
         // create subfolder for this sensor group
-        create_dir(&sensor_group_path)?;
+        create_dir_all(&sensor_group_path)?;
+        println!("Created directory {:?}", sensor_group_path.as_os_str());
 
         for sensor in &sensor_group.sensors {
             // create file for this specific sensor
             let mut sensor_file_path = sensor_group_path.clone();
-            sensor_file_path.push("/");
-            sensor_file_path.push(&sensor.label);
+            sensor_file_path.push(&format!("{}.csv", sensor.label));
             group_files.push(File::create(&sensor_file_path)?);
+            println!("Created log file {:?}", sensor_file_path.as_os_str());
         }
 
         sensor_log_files.push(group_files);
@@ -66,13 +68,14 @@ fn main() -> Result<(), ControllerError> {
     let dashboard_stream_ref = &dashboard_stream;
 
     std::thread::scope(|s| {
-        for (group_id, log_file_group) in sensor_log_files.into_iter().enumerate() {
+        for (group_id, mut log_file_group) in sensor_log_files.into_iter().enumerate() {
             let adcs: Vec<Mcp3208> = Vec::new();
             s.spawn(move || {
                 sensor_listen(
                     s,
                     group_id as u8,
                     config_ref,
+                    &mut log_file_group,
                     &adcs,
                     state_ref,
                     dashboard_stream_ref,
