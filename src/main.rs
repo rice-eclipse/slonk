@@ -1,5 +1,5 @@
 use std::{
-    fs::{create_dir, create_dir_all, File},
+    fs::{create_dir_all, File},
     io::BufReader,
     path::PathBuf,
     sync::Mutex,
