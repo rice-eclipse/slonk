@@ -12,16 +12,16 @@ pub struct Bus {
     /// The clock period is the time between two rising edges on the clock.
     /// Therefore the length of a pulse (the time between a rising and falling
     /// edge) is half this period.
-    period: Duration,
+    pub period: Duration,
     /// The clock pin.
     /// This pin will be actuated on a regular timescale
-    pin_clk: Line,
+    pub pin_clk: Line,
     /// The Master Output - Slave Input pin.
     /// This pin is used to send messages to slave devices.
-    pin_mosi: Line,
+    pub pin_mosi: Line,
     /// The Master Input - Slave Output pin.
     /// This pin is used to receive messages from slave devices.
-    pin_miso: Line,
+    pub pin_miso: Line,
 }
 
 /// An SPI device.

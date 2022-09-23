@@ -3,11 +3,18 @@ use std::{
     io::BufReader,
     path::PathBuf,
     sync::Mutex,
+    time::Duration,
 };
 
+use gpio_cdev::Chip;
 use resfet_controller_2::{
-    config::Configuration, hardware::Mcp3208, thread::sensor_listen, ControllerError,
-    ControllerState, StateGuard,
+    config::Configuration,
+    hardware::{
+        spi::{Bus, Device},
+        Mcp3208,
+    },
+    thread::sensor_listen,
+    ControllerError, ControllerState, StateGuard,
 };
 
 /// The main function for the RESFET controller.
@@ -66,17 +73,28 @@ fn main() -> Result<(), ControllerError> {
     let state_ref = &state;
     let dashboard_stream: Mutex<Option<File>> = Mutex::new(None);
     let dashboard_stream_ref = &dashboard_stream;
+    let mut gpio_chip = Chip::new("/dev/gpiochip0")?;
+    let bus = Bus {
+        period: Duration::from_secs(1) / config.spi_frequency_clk,
+        pin_clk: gpio_chip.get_line(config.spi_clk as u32)?,
+        pin_mosi: gpio_chip.get_line(config.spi_mosi as u32)?,
+        pin_miso: gpio_chip.get_line(config.spi_miso as u32)?,
+    };
+    let mut adcs = Vec::new();
+    for &cs_pin in &config.adc_cs {
+        adcs.push(Mcp3208::new(Device::new(&bus, &mut gpio_chip, cs_pin)?));
+    }
+    let adcs_ref = &adcs;
 
     std::thread::scope(|s| {
         for (group_id, mut log_file_group) in sensor_log_files.into_iter().enumerate() {
-            let adcs: Vec<Mcp3208> = Vec::new();
             s.spawn(move || {
                 sensor_listen(
                     s,
                     group_id as u8,
                     config_ref,
                     &mut log_file_group,
-                    &adcs,
+                    adcs_ref,
                     state_ref,
                     dashboard_stream_ref,
                 )
