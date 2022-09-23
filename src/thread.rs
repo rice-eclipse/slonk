@@ -36,13 +36,22 @@ use crate::{
 ///     automatically update the state as needed.
 /// * `dashboard_stream`: A stream where messages can be sent to the dashboard.
 ///
+/// # Errors
+///
+/// This function may return many errors, but most of the error causes will be
+/// caused by GPIO failures.
+///
+/// For a more exact description of all possible errors, refer to the
+/// documentation for `ControllerError`.
+///
 /// # Panics
 ///
 /// This function will panic in any of the following cases:
 ///
 /// * If the value of `group_id` does not correspond to an existing sensor
 ///     group.
-fn sensor_listen<'a>(
+/// * If the current system time is before the UNIX epoch.
+pub fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
     configuration: &'a Configuration,
