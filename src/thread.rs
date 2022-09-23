@@ -1,6 +1,7 @@
 //! The core sensor data collection threads.
 
 use std::{
+    collections::VecDeque,
     io::Write,
     sync::Mutex,
     thread::{sleep, Scope},
@@ -31,6 +32,8 @@ use crate::{
 ///     object.
 /// * `adcs`: The set of ADCs which can be read from by the sensors.
 /// * `configuration`: The primary configuration of the controller.
+/// * `log_files`: Handles for log files associated with the sensors in this
+///     sensor group. Each index corresponds exactly to its associated index in the group.
 /// * `state`: The state of the whole system.
 ///     If a sensor enters an invalid value during ignition, this thread will
 ///     automatically update the state as needed.
@@ -51,10 +54,11 @@ use crate::{
 /// * If the value of `group_id` does not correspond to an existing sensor
 ///     group.
 /// * If the current system time is before the UNIX epoch.
-pub fn sensor_listen<'a>(
+fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
     configuration: &'a Configuration,
+    log_files: &mut [impl Write],
     adcs: &[impl Adc],
     state: &'a StateGuard,
     dashboard_stream: &'a Mutex<Option<impl Write>>,
@@ -65,8 +69,19 @@ pub fn sensor_listen<'a>(
     let group = &configuration.sensor_groups[usize::from(group_id)];
     // the last time that we sent a sensor status update
     let mut last_transmission_time = SystemTime::now();
-    // most recent values read, to be sent to the dashboard
-    let mut most_recent_readings: Vec<Option<(SystemTime, u16)>> = vec![None; group.sensors.len()];
+
+    // the most recent reading from each sensor which has *not* already been
+    // sent to the dashboard.
+    // each element will be None if the most recent reading was sent to the
+    // dashboard.
+    let mut transmission_readings: Vec<Option<(SystemTime, u16)>> = vec![None; group.sensors.len()];
+
+    // most recent values read, to be logged.
+    // in each queue, the "back" contains the most recent readings and the
+    // "front" contains the oldest ones.
+    let mut most_recent_readings: Vec<VecDeque<(SystemTime, u16)>> =
+        vec![VecDeque::new(); group.sensors.len()];
+
     // Rolling average values for sensor readings.
     let mut rolling_averages: Vec<f64> = group
         .sensors
@@ -94,8 +109,8 @@ pub fn sensor_listen<'a>(
         for (idx, sensor) in group.sensors.iter().enumerate() {
             let reading = adcs[usize::from(sensor.adc)].read(&consumer_name, sensor.channel)?;
             let read_time = SystemTime::now();
-            most_recent_readings[idx] = Some((read_time, reading));
-
+            most_recent_readings[idx].push_back((read_time, reading));
+            transmission_readings[idx] = Some((read_time, reading));
             // update rolling averages
             let width = sensor.rolling_average_width.unwrap_or(1);
             let calibrated_value =
@@ -124,8 +139,8 @@ pub fn sensor_listen<'a>(
                     // some iterator hackery to get things in the right shape
                     &Message::SensorValue {
                         group_id,
-                        readings: &most_recent_readings
-                            .into_iter()
+                        readings: &transmission_readings
+                            .iter()
                             .enumerate()
                             .filter_map(|(sensor_id, opt)| {
                                 #[allow(clippy::cast_possible_truncation)]
@@ -141,7 +156,13 @@ pub fn sensor_listen<'a>(
             }
 
             last_transmission_time = SystemTime::now();
-            most_recent_readings = vec![None; group.sensors.len()];
+            transmission_readings = vec![None; group.sensors.len()];
+        }
+
+        for (sensor_id, reading_queue) in most_recent_readings.iter().enumerate() {
+            if reading_queue.len() >= configuration.log_buffer_size {
+                write_sensor_log(&mut log_files[sensor_id], reading_queue)?;
+            }
         }
 
         // use the system state to determine how long to sleep until the next
@@ -159,6 +180,57 @@ pub fn sensor_listen<'a>(
 
     // we are now quitting
     Ok(())
+}
+
+/// Write a new log datum to the sensor log file.
+///
+/// # Inputs
+///
+/// * `log_file`: The file to which the log will be written.
+///     There must be exactly one log file per sensor.
+/// * `adc_readings`: All the most recent sensor readings to be written to the
+///     file.
+///
+/// # Results
+///
+/// Will write the data from the ADC readings in a CSV format to the file.
+/// There will be two "columns" to this CSV data:
+/// 1. The time since the UNIX epoch, in nanoseconds.
+/// 1. The raw ADC value of the sensor at this time.
+/// Will also include a trailing newline after the last row.
+/// At the end of writing all of these lines, the file will be "flushed,"
+/// meaning that all data will be immediately saved.
+///
+/// For instance, if a sensor had a reading of 42 at a time of 1 second, 500
+/// nanoseconds after the UNIX epoch began, the following text would be
+/// written:
+///
+/// ```text
+/// 1000000500,42
+///
+/// ```
+///
+/// If the entire process succeeds, this function will return `Ok(())`.
+///
+/// # Errors
+///
+/// This function will return an `Err` if writing to the log file fails.
+///
+/// # Panics
+///
+/// This function will panic if a time contained in the ADC readings was before
+/// the UNIX epoch.
+fn write_sensor_log<'a>(
+    log_file: &mut impl Write,
+    adc_readings: impl IntoIterator<Item = &'a (SystemTime, u16)>,
+) -> std::io::Result<()> {
+    for (sys_time, reading) in adc_readings {
+        let since_epoch_time = sys_time.duration_since(SystemTime::UNIX_EPOCH).unwrap();
+
+        writeln!(log_file, "{},{}", since_epoch_time.as_nanos(), reading)?;
+    }
+
+    log_file.flush()
 }
 
 #[cfg(test)]
@@ -184,6 +256,7 @@ mod tests {
         // read
         let config = r#"{
             "frequency_status": 10,
+            "log_buffer_size": 1,
             "sensor_groups": [
                 {
                     "label": "dummy",
@@ -223,18 +296,25 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
         let state = StateGuard::new(ControllerState::Standby);
+        let mut logs = vec![Cursor::new(Vec::new()); 2];
         let output_stream = Mutex::new(Some(Vec::new()));
 
         // actual magic happens here
         scope(|s| {
+            // move to a state where logging occurs so we can verify that
+            // logging is correct
+
             // spawn a sensor listener thread and let it do its thing
-            let handle = s.spawn(|| sensor_listen(s, 0, &config, &adcs, &state, &output_stream));
+            let handle =
+                s.spawn(|| sensor_listen(s, 0, &config, &mut logs, &adcs, &state, &output_stream));
 
             // give the thread enough time to read exactly one value
             sleep(Duration::from_millis(150));
 
             // notify the thread to die
+            // hackery to make a valid state transition sequence
             state.move_to(ControllerState::Quit).unwrap();
+            println!("joining...");
 
             // collect the thread's return value
             handle.join().unwrap().unwrap();
@@ -271,5 +351,25 @@ mod tests {
             .collect();
 
         assert_eq!(readings, [(0, 0), (1, 1)]);
+
+        // check that log information was generated correctly
+        let logged_strings: Vec<String> = logs
+            .into_iter()
+            .map(|cursor| String::from_utf8(cursor.into_inner()).unwrap())
+            .collect();
+
+        for (idx, logged_string) in logged_strings.iter().enumerate() {
+            let tokens = logged_string
+                .split(',')
+                .flat_map(|s| s.split('\n'))
+                .map(String::from)
+                .collect::<Vec<_>>();
+
+            // check that sensor readings got written in the right columns
+            assert_eq!(tokens[1], format!("{idx}").as_str());
+            assert_eq!(tokens[3], format!("{idx}").as_str());
+            assert_eq!(tokens[5], format!("{idx}").as_str());
+            assert_eq!(tokens[6], "");
+        }
     }
 }
