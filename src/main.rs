@@ -100,9 +100,9 @@ fn main() -> Result<(), ControllerError> {
                 )
             });
         }
-    });
 
-    println!("Successfully spawned sensor listener threads.");
+        println!("Successfully spawned sensor listener threads.");
+    });
     // successful termination!
     Ok(())
 }
