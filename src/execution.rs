@@ -1,5 +1,5 @@
 //! Functions for command execution.
-use gpio_cdev::{Chip, Line, LineRequestFlags};
+use gpio_cdev::{Line, LineRequestFlags};
 
 use crate::{
     config::{Action, Configuration},
@@ -9,22 +9,28 @@ use crate::{
 };
 use std::{io::Write, sync::Mutex, time::SystemTime};
 
-/// Executing and logging sent commands, writing request time and execution time
+/// Execute a command and log the process of execution.
 ///
-/// #Inputs
+/// # Inputs
 ///
 /// * `cmd`: The command to be executed.
 /// * `log_file`: Location where log information will be written.
-/// *  `configuration` : Configuration object for program execution
-/// *  `driver_lines` : System GPIO output lines
-/// *  `state` : requested actuation state for pin
-/// *  `dashboard_stream` : Messages to be sent to the dashboard
+/// * `configuration`: Configuration object for program execution.
+/// * `driver_lines`: Output lines for the drivers.
+///     Each index in `driver_lines` corresponds one-to-one with the drivers in
+///     `configuration`.  
+/// * `state`: The controller for the current system state.
+/// * `dashboard_stream`: The stream to use for writing messages to the
+///     dashboard.
 ///
-/// #Errors
+/// # Errors
 ///
-/// *  This function may return an 'Err' if at any point execution of comnand is
-/// unsuccessful
+/// TODO: fully examine all callees to describe possible errors.
 ///
+/// # Panics
+///
+/// This function will panic if the current system time is before the UNIX
+/// epoch.
 pub fn handle_command(
     cmd: &Command,
     log_file: &mut impl Write,
@@ -37,7 +43,7 @@ pub fn handle_command(
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
     // Second column for execution status of command sent
-    writeln!(log_file, "{},{},{}", time.as_nanos(), "request", cmd)?;
+    writeln!(log_file, "{},request,{}", time.as_nanos(), cmd)?;
     log_file.flush()?;
 
     match cmd {
@@ -56,7 +62,7 @@ pub fn handle_command(
     let time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    writeln!(log_file, "{},{},{}", time.as_nanos(), "finish", cmd)?;
+    writeln!(log_file, "{},finish,{}", time.as_nanos(), cmd)?;
     log_file.flush()?;
 
     Ok(())

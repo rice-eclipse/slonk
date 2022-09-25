@@ -67,7 +67,7 @@ fn main() -> Result<(), ControllerError> {
     }
 
     // create log file for commands that have been executed
-    let cmd_log_path = PathBuf::from_iter(&[&logs_path, "commands.csv"]);
+    let cmd_log_path = PathBuf::from_iter(&[logs_path, "commands.csv"]);
     let cmd_file = File::create(&cmd_log_path)?;
 
     println!("Successfully created log files");
