@@ -291,6 +291,8 @@ mod tests {
                     ]
                 }
             ],
+            "pre_ignite_time": 500,
+            "post_ignite_time": 5000,
             "drivers": [],
             "ignition_sequence": [],
             "estop_sequence": [],
