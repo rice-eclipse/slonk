@@ -11,6 +11,8 @@ use crate::config::Configuration;
 #[serde(tag = "type")]
 /// The set of messages which can be sent from the controller to the dashboard.
 pub enum Message<'a> {
+    /// A confirmation to the dashboard that the controller is ready.
+    Ready,
     /// A configuration message.
     Config {
         /// A reference to the entire configuration object for this controller.

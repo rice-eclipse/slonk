@@ -1,7 +1,7 @@
 //! Functions for handling incoming messages to the controller from the
 //! dashboard.
 use serde::Deserialize;
-use std::io::Read;
+use std::{io::Read, fmt::Display};
 
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -111,6 +111,17 @@ impl Command {
             .map_err(|_| ParseError::Malformed(String::from_utf8_lossy(&buffer).to_string()))?;
 
         Ok(cmd)
+    }
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Command::Ready => write!(f, "ready"),
+            Command::Actuate { driver_id, state } => write!(f,"actuate {} {}", driver_id, state),
+            Command::Ignition => write!(f, "ignition"),
+            Command::EmergencyStop => write!(f, "estop"),
+        }
     }
 }
 

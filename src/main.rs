@@ -66,6 +66,10 @@ fn main() -> Result<(), ControllerError> {
         sensor_log_files.push(group_files);
     }
 
+    // create log file for commands that have been executed
+    let cmd_log_path = PathBuf::from_iter(&[&logs_path, "commands.csv"]);
+    let cmd_file = File::create(&cmd_log_path)?;
+
     println!("Successfully created log files");
     println!("Now spawning sensor listener threads...");
 
@@ -102,6 +106,11 @@ fn main() -> Result<(), ControllerError> {
         }
 
         println!("Successfully spawned sensor listener threads.");
+
+        // TODO:
+        // listen for incoming TCP connections and accept them.
+        // then, wait for messages from the dashboard via TCP.
+        // once we have a message, spawn a new thread to handle each one
     });
     // successful termination!
     Ok(())
