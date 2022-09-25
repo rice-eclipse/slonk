@@ -1,8 +1,8 @@
 //! Functions for command execution.
-use gpio_cdev::{Line, LineRequestFlags};
 
 use crate::{
     config::{Action, Configuration},
+    hardware::GpioPin,
     incoming::Command,
     outgoing::Message,
     ControllerError, ControllerState, StateGuard,
@@ -40,7 +40,7 @@ pub fn handle_command(
     cmd: &Command,
     log_file: &mut impl Write,
     configuration: &Configuration,
-    driver_lines: &[Line],
+    driver_lines: &[impl GpioPin],
     state: &StateGuard,
     dashboard_stream: &Mutex<Option<impl Write>>,
 ) -> Result<(), ControllerError> {
@@ -85,7 +85,7 @@ pub fn handle_command(
 /// * We failed to gain control over GPIO.
 pub fn emergency_stop(
     configuration: &Configuration,
-    driver_lines: &[Line],
+    driver_lines: &[impl GpioPin],
     state: &StateGuard,
 ) -> Result<(), ControllerError> {
     // transition to EStop, and if it's already in EStopping, don't interfere
@@ -111,7 +111,7 @@ pub fn emergency_stop(
 /// * We failed to gain control over GPIO.
 fn ignition(
     configuration: &Configuration,
-    driver_lines: &[Line],
+    driver_lines: &[impl GpioPin],
     state: &StateGuard,
 ) -> Result<(), ControllerError> {
     state.move_to(ControllerState::PreIgnite)?;
@@ -148,13 +148,11 @@ fn ignition(
 ///
 /// This function may return an error if we are unable to gain control over the GPIO pin associated with the driver.
 fn actuate_driver(
-    driver_lines: &[Line],
+    driver_lines: &[impl GpioPin],
     driver_id: u8,
     state: bool,
 ) -> Result<(), ControllerError> {
-    driver_lines[driver_id as usize]
-        .request(LineRequestFlags::OUTPUT, 0, "resfet-cmd-handler")?
-        .set_value(if state { 1 } else { 0 })?;
+    driver_lines[driver_id as usize].write("resfet-cmd-handler", state)?;
 
     Ok(())
 }
@@ -163,12 +161,15 @@ fn actuate_driver(
 /// ignition.
 ///
 /// # Errors
-fn perform_actions(driver_lines: &[Line], actions: &[Action]) -> Result<(), ControllerError> {
+fn perform_actions(
+    driver_lines: &[impl GpioPin],
+    actions: &[Action],
+) -> Result<(), ControllerError> {
     for action in actions {
         match action {
-            Action::Actuate { driver_id, state } => driver_lines[*driver_id as usize]
-                .request(LineRequestFlags::OUTPUT, 0, "resfet-action-seq")?
-                .set_value(if *state { 1 } else { 0 })?,
+            Action::Actuate { driver_id, state } => {
+                driver_lines[*driver_id as usize].write("resfet-action-seq", *state)?;
+            }
             Action::Sleep { duration } => sleep(*duration),
         };
     }

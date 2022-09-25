@@ -8,12 +8,10 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use gpio_cdev::Line;
-
 use crate::{
     config::Configuration,
     execution::emergency_stop,
-    hardware::Adc,
+    hardware::{Adc, GpioPin},
     outgoing::{Message, SensorReading},
     ControllerError, ControllerState, StateGuard,
 };
@@ -62,7 +60,7 @@ pub fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
     configuration: &'a Configuration,
-    driver_lines: &'a [Line],
+    driver_lines: &'a [impl GpioPin + std::marker::Sync],
     log_files: &mut [impl Write],
     adcs: &[impl Adc],
     state: &'a StateGuard,
@@ -308,13 +306,10 @@ mod tests {
         let state = StateGuard::new(ControllerState::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
         let output_stream = Mutex::new(Some(Vec::new()));
-        let driver_lines = [];
+        let driver_lines: [gpio_cdev::Line; 0] = [];
 
         // actual magic happens here
         scope(|s| {
-            // move to a state where logging occurs so we can verify that
-            // logging is correct
-
             // spawn a sensor listener thread and let it do its thing
             let handle = s.spawn(|| {
                 sensor_listen(
@@ -392,5 +387,89 @@ mod tests {
             assert_eq!(tokens[5], format!("{idx}").as_str());
             assert_eq!(tokens[6], "");
         }
+    }
+
+    #[test]
+    /// Test that an emergency stop is successfully called.
+    fn estop_called() {
+        // create some dummy configuration for the sensor listener thread to
+        // read
+        let config = r#"{
+            "frequency_status": 10,
+            "log_buffer_size": 1,
+            "sensor_groups": [
+                {
+                    "label": "dummy",
+                    "frequency_standby": 10,
+                    "frequency_ignition": 10,
+                    "frequency_transmission": 10,
+                    "sensors": [
+                        {
+                            "label": "dummy_sensor0",
+                            "units": "mops",
+                            "calibration_intercept": 0,
+                            "calibration_slope": 1,
+                            "adc": 0,
+                            "channel": 0,
+                            "rolling_average_width": 2,
+                            "range": [-5, 5]
+                        }
+                    ]
+                }
+            ],
+            "pre_ignite_time": 0,
+            "post_ignite_time": 0,
+            "drivers": [],
+            "ignition_sequence": [],
+            "estop_sequence": [ {
+                "type": "Sleep",
+                "duration": {
+                    "secs": 1,
+                    "nanos": 0
+                }
+            }],
+            "spi_mosi": 0,
+            "spi_miso": 0,
+            "spi_clk": 0,
+            "spi_frequency_clk": 50000,
+            "adc_cs": [0]
+        }"#;
+
+        let adcs = [ReturnsNumber(100)];
+
+        let mut cfg_cursor = Cursor::new(config);
+        let config = Configuration::parse(&mut cfg_cursor).unwrap();
+
+        let state = StateGuard::new(ControllerState::Standby);
+        let mut logs = vec![Cursor::new(Vec::new()); 2];
+        let output_stream: Mutex<Option<Cursor<Vec<u8>>>> = Mutex::new(None);
+        let driver_lines: [gpio_cdev::Line; 0] = [];
+
+        // actual magic happens here
+        scope(|s| {
+            // spawn a sensor listener thread and let it do its thing
+            s.spawn(|| {
+                sensor_listen(
+                    s,
+                    0,
+                    &config,
+                    &driver_lines,
+                    &mut logs,
+                    &adcs,
+                    &state,
+                    &output_stream,
+                )
+            });
+
+            // give the thread enough time to read values
+            sleep(Duration::from_millis(300));
+
+            // check that we are currently e-stopping
+            assert_eq!(state.status().unwrap(), ControllerState::EStopping);
+
+            while state.move_to(ControllerState::Quit).is_err() {
+                // kill the thread
+            }
+        });
     }
 }

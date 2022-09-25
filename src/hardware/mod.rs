@@ -5,9 +5,34 @@
 
 pub mod spi;
 
-use std::time::Duration;
+use std::{sync::Mutex, time::Duration};
+
+use gpio_cdev::{Line, LineRequestFlags};
 
 use crate::ControllerError;
+
+/// A trait for GPIO pins.
+pub trait GpioPin {
+    /// Perform a GPIO read on this pin.
+    /// Returns `true` if the pin is pulled high, and `false` otherwise.
+    /// `consumer` is a brief (<32 characters) string describing the process
+    /// using this pin.
+    ///
+    /// # Errors
+    ///
+    /// This can return an error if the read failed.
+    fn read(&self, consumer: &str) -> Result<bool, gpio_cdev::Error>;
+
+    /// Perform a GPIO write on this pin, setting the pin's logic level to
+    /// `value`.
+    /// `consumer` is a brief (<32 characters) string describing the process
+    /// using this pin.
+    ///
+    /// # Errors
+    ///
+    /// This can return an error if the read failed.
+    fn write(&self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error>;
+}
 
 /// A generic trait for an ADC (Analog-to-Digital Converter).
 ///
@@ -41,6 +66,13 @@ pub struct Mcp3208<'a> {
     /// The SPI device associated with this ADC.
     device: spi::Device<'a>,
 }
+
+/// A structure for testing GPIO writes.
+///
+/// A `ListenerPin` stores the history of all writes to it.
+/// When read from, a `ListenerPin` will return the last written state of the
+/// pin.
+pub struct ListenerPin(Mutex<Vec<bool>>);
 
 impl<'a> Mcp3208<'a> {
     /// The minimum frequency at which the SPI clock can operate for the MCP3208
@@ -99,5 +131,33 @@ impl Adc for Mcp3208<'_> {
         // the back two bytes of `incoming` now have our data in big endian
         // representation.
         Ok(u16::from_be_bytes([incoming[1], incoming[2]]))
+    }
+}
+
+impl GpioPin for ListenerPin {
+    fn read(&self, _consumer: &str) -> Result<bool, gpio_cdev::Error> {
+        Ok(*self.0.lock().unwrap().last().unwrap())
+    }
+
+    fn write(&self, _consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
+        self.0.lock().unwrap().push(value);
+
+        Ok(())
+    }
+}
+
+impl GpioPin for Line {
+    fn read(&self, consumer: &str) -> Result<bool, gpio_cdev::Error> {
+        Ok(1 == self
+            .request(LineRequestFlags::INPUT, 0, consumer)?
+            .get_value()?)
+    }
+
+    fn write(&self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
+        let int_val = if value { 1 } else { 0 };
+        self.request(LineRequestFlags::OUTPUT, int_val, consumer)?
+            .set_value(int_val)?;
+
+        Ok(())
     }
 }
