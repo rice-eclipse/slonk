@@ -7,7 +7,12 @@ use crate::{
     outgoing::Message,
     ControllerError, ControllerState, StateGuard,
 };
-use std::{io::Write, sync::Mutex, time::SystemTime};
+use std::{
+    io::Write,
+    sync::Mutex,
+    thread::sleep,
+    time::{Duration, SystemTime},
+};
 
 /// Execute a command and log the process of execution.
 ///
@@ -55,8 +60,8 @@ pub fn handle_command(
             }
         }
         Command::Actuate { driver_id, state } => actuate_driver(driver_lines, *driver_id, *state)?,
-        Command::Ignition => ignition(configuration, state)?,
-        Command::EmergencyStop => emergency_stop(configuration, state)?,
+        Command::Ignition => ignition(configuration, driver_lines, state)?,
+        Command::EmergencyStop => emergency_stop(configuration, driver_lines, state)?,
     };
 
     let time = SystemTime::now()
@@ -69,25 +74,24 @@ pub fn handle_command(
 }
 
 /// Attempt to perform an emergency stop procedure.
-/// If an emergency stop procedure is already running, this function will not
-/// interrupt that procedure already in progress.
 ///
 /// # Errors
 ///
-/// This function may return an `Err` due to thread poisoning or failed GPIO.
+/// This function can return an `Err` in the following cases:
+///
+/// * The user attempted to perform an ignition from a state which was not
+///     standby.
+/// * A lock was poisoned.
+/// * We failed to gain control over GPIO.
 pub fn emergency_stop(
     configuration: &Configuration,
+    driver_lines: &[Line],
     state: &StateGuard,
 ) -> Result<(), ControllerError> {
     // transition to EStop, and if it's already in EStopping, don't interfere
-    let transition_result = state.move_to(ControllerState::EStopping);
-    match transition_result {
-        Ok(_) => (),
-        Err(ControllerError::IllegalTransition { from: _, to: _ }) => return Ok(()),
-        err => return err,
-    };
+    state.move_to(ControllerState::EStopping)?;
 
-    perform_actions(&configuration.estop_sequence)?;
+    perform_actions(driver_lines, &configuration.estop_sequence)?;
 
     // done doing the estop sequence, move back to standby
     state.move_to(ControllerState::Standby)?;
@@ -95,8 +99,38 @@ pub fn emergency_stop(
     Ok(())
 }
 
-fn ignition(configuration: &Configuration, state: &StateGuard) -> Result<(), ControllerError> {
-    todo!()
+/// Attempt to perform an ignition procedure.
+///
+/// # Errors
+///
+/// This function can return an `Err` in the following cases:
+///
+/// * The user attempted to perform an ignition from a state which was not
+///     standby.
+/// * A lock was poisoned.
+/// * We failed to gain control over GPIO.
+fn ignition(
+    configuration: &Configuration,
+    driver_lines: &[Line],
+    state: &StateGuard,
+) -> Result<(), ControllerError> {
+    state.move_to(ControllerState::PreIgnite)?;
+    sleep(Duration::from_millis(u64::from(
+        configuration.pre_ignite_time,
+    )));
+
+    state.move_to(ControllerState::Ignite)?;
+    perform_actions(driver_lines, &configuration.ignition_sequence)?;
+
+    state.move_to(ControllerState::PostIgnite)?;
+    sleep(Duration::from_millis(u64::from(
+        configuration.post_ignite_time,
+    )));
+
+    // done doing the ignition sequence, move back to standby
+    state.move_to(ControllerState::Standby)?;
+
+    Ok(())
 }
 
 /// Actuate a given driver to a given state using GPIO cdev to interface with OS.
@@ -129,6 +163,15 @@ fn actuate_driver(
 /// ignition.
 ///
 /// # Errors
-fn perform_actions(actions: &[Action]) -> Result<(), ControllerError> {
-    todo!();
+fn perform_actions(driver_lines: &[Line], actions: &[Action]) -> Result<(), ControllerError> {
+    for action in actions {
+        match action {
+            Action::Actuate { driver_id, state } => driver_lines[*driver_id as usize]
+                .request(LineRequestFlags::OUTPUT, 0, "resfet-action-seq")?
+                .set_value(if *state { 1 } else { 0 })?,
+            Action::Sleep { duration } => sleep(*duration),
+        };
+    }
+
+    Ok(())
 }

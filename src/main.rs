@@ -75,8 +75,10 @@ fn main() -> Result<(), ControllerError> {
 
     let state = StateGuard::new(ControllerState::Standby);
     let state_ref = &state;
+
     let dashboard_stream: Mutex<Option<File>> = Mutex::new(None);
     let dashboard_stream_ref = &dashboard_stream;
+
     let mut gpio_chip = Chip::new("/dev/gpiochip0")?;
     let bus = Bus {
         period: Duration::from_secs(1) / config.spi_frequency_clk,
@@ -84,11 +86,18 @@ fn main() -> Result<(), ControllerError> {
         pin_mosi: gpio_chip.get_line(config.spi_mosi as u32)?,
         pin_miso: gpio_chip.get_line(config.spi_miso as u32)?,
     };
+
     let mut adcs = Vec::new();
     for &cs_pin in &config.adc_cs {
         adcs.push(Mcp3208::new(Device::new(&bus, &mut gpio_chip, cs_pin)?));
     }
     let adcs_ref = &adcs;
+
+    let mut driver_lines = Vec::new();
+    for driver in &config.drivers {
+        driver_lines.push(gpio_chip.get_line(u32::from(driver.pin))?);
+    }
+    let driver_lines_ref = &driver_lines;
 
     std::thread::scope(|s| {
         for (group_id, mut log_file_group) in sensor_log_files.into_iter().enumerate() {
@@ -97,6 +106,7 @@ fn main() -> Result<(), ControllerError> {
                     s,
                     group_id as u8,
                     config_ref,
+                    driver_lines_ref,
                     &mut log_file_group,
                     adcs_ref,
                     state_ref,

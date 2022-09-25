@@ -8,6 +8,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use gpio_cdev::Line;
+
 use crate::{
     config::Configuration,
     execution::emergency_stop,
@@ -17,6 +19,7 @@ use crate::{
 };
 
 #[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 /// A function which will continuously listen for new data from sensors.
 /// It will loop indefinitely.
 ///
@@ -32,6 +35,7 @@ use crate::{
 ///     object.
 /// * `adcs`: The set of ADCs which can be read from by the sensors.
 /// * `configuration`: The primary configuration of the controller.
+/// * `driver_lines`: The GPIO lines for each driver.
 /// * `log_files`: Handles for log files associated with the sensors in this
 ///     sensor group. Each index corresponds exactly to its associated index in the group.
 /// * `state`: The state of the whole system.
@@ -58,6 +62,7 @@ pub fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
     configuration: &'a Configuration,
+    driver_lines: &'a [Line],
     log_files: &mut [impl Write],
     adcs: &[impl Adc],
     state: &'a StateGuard,
@@ -124,8 +129,10 @@ pub fn sensor_listen<'a>(
             if let Some((min, max)) = sensor.range {
                 if rolling_avg < min || max < rolling_avg {
                     // oh no! a sensor is now in an illegal range!
-                    // spin up another thread to emergency stop
-                    thread_scope.spawn(|| emergency_stop(configuration, state));
+                    // spin up another thread to emergency stop.
+                    // this may return an error due to illegal transistion, but
+                    // that is not our problem.
+                    thread_scope.spawn(|| emergency_stop(configuration, driver_lines, state));
                 }
             }
         }
@@ -251,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn data_written() {
         // create some dummy configuration for the sensor listener thread to
         // read
@@ -298,6 +306,7 @@ mod tests {
         let state = StateGuard::new(ControllerState::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
         let output_stream = Mutex::new(Some(Vec::new()));
+        let driver_lines = [];
 
         // actual magic happens here
         scope(|s| {
@@ -305,8 +314,18 @@ mod tests {
             // logging is correct
 
             // spawn a sensor listener thread and let it do its thing
-            let handle =
-                s.spawn(|| sensor_listen(s, 0, &config, &mut logs, &adcs, &state, &output_stream));
+            let handle = s.spawn(|| {
+                sensor_listen(
+                    s,
+                    0,
+                    &config,
+                    &driver_lines,
+                    &mut logs,
+                    &adcs,
+                    &state,
+                    &output_stream,
+                )
+            });
 
             // give the thread enough time to read exactly one value
             sleep(Duration::from_millis(150));

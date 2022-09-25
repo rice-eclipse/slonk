@@ -81,6 +81,16 @@ The fields of the main configuration object are as follows:
 - `sensor_groups` - array: A list describing each set of sensors and the threads
   that manage them. It will also include calibration information.
 
+- `pre_ignite_time` - number. The duration of the pre-ignition period in
+  milliseconds.
+  During pre-ignition, sensors log data at a high frequency, but the ignition
+  procedure has not yet started.
+
+- `post_ignite_time` - number. The duration of the post-ignition period in
+  milliseconds.
+  During post-ignition, sensors log data at a high frequency, but the ignition
+  procedure has already ended.
+
 - `drivers` - array: A list describing each driver, giving each a unique
   identifier (which will later be referred to during ignition).
 
@@ -222,6 +232,8 @@ of a configuration apparent.
       "pin": 33
     }
   ],
+  "pre_ignite_time": 500,
+  "post_ignite_time": 5000,
   "ignition_sequence": [
     {
       "type": "Actuate",

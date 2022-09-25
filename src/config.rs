@@ -22,6 +22,18 @@ pub struct Configuration {
     pub sensor_groups: Vec<SensorGroup>,
     /// The drivers, which actuate external digital pins.
     pub drivers: Vec<Driver>,
+    /// The amount of time to wait in a pre-ignition state after processing an
+    /// ignition command.
+    ///
+    /// During pre-ignition, the sensor logging rate is fast, but no actual
+    /// ignition has happened yet.
+    pub pre_ignite_time: u32,
+    /// The amount of time to wait in a post-ignition state after processing an
+    /// ignition command.
+    ///
+    /// During pre-ignition, the sensor logging rate is fast, but there
+    /// (should) be no more oxidizer flow and ignition should have stopped.
+    pub post_ignite_time: u32,
     /// The sequence of actions to be performed during ignition.
     pub ignition_sequence: Vec<Action>,
     /// The sequence of actions to be performed during emergency stop.
@@ -208,6 +220,8 @@ mod tests {
                     ]
                 }
             ],
+            "pre_ignite_time": 500,
+            "post_ignite_time": 5000,
             "drivers": [
                 {
                     "label": "OXI_FILL",
@@ -279,6 +293,8 @@ mod tests {
                     },
                 ],
             }],
+            pre_ignite_time: 500,
+            post_ignite_time: 5000,
             drivers: vec![Driver {
                 label: "OXI_FILL".into(),
                 pin: 33,
