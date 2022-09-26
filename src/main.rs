@@ -1,6 +1,7 @@
 use std::{
     fs::{create_dir_all, File},
-    io::BufReader,
+    io::{BufReader, Read, Write},
+    net::{TcpListener, TcpStream},
     path::PathBuf,
     sync::Mutex,
     time::Duration,
@@ -11,7 +12,7 @@ use resfet_controller_2::{
     config::Configuration,
     hardware::{
         spi::{Bus, Device},
-        Mcp3208,
+        GpioPin, Mcp3208,
     },
     thread::sensor_listen,
     ControllerError, ControllerState, StateGuard,
@@ -68,7 +69,8 @@ fn main() -> Result<(), ControllerError> {
 
     // create log file for commands that have been executed
     let cmd_log_path = PathBuf::from_iter(&[logs_path, "commands.csv"]);
-    let cmd_file = File::create(&cmd_log_path)?;
+    let mut cmd_file = File::create(&cmd_log_path)?;
+    let cmd_file_ref = &mut cmd_file;
 
     println!("Successfully created log files");
     println!("Now spawning sensor listener threads...");
@@ -76,8 +78,10 @@ fn main() -> Result<(), ControllerError> {
     let state = StateGuard::new(ControllerState::Standby);
     let state_ref = &state;
 
-    let dashboard_stream: Mutex<Option<File>> = Mutex::new(None);
-    let dashboard_stream_ref = &dashboard_stream;
+    // when a client connects, the inner value of this mutex will be `Some`
+    // containing a TCP stream to the dashboard
+    let to_dash = Mutex::new(None);
+    let to_dash_ref = &to_dash;
 
     let mut gpio_chip = Chip::new("/dev/gpiochip0")?;
     let bus = Bus {
@@ -110,18 +114,47 @@ fn main() -> Result<(), ControllerError> {
                     &mut log_file_group,
                     adcs_ref,
                     state_ref,
-                    dashboard_stream_ref,
+                    to_dash_ref,
                 )
             });
         }
 
         println!("Successfully spawned sensor listener threads.");
+        println!("Opening network...");
 
-        // TODO:
-        // listen for incoming TCP connections and accept them.
-        // then, wait for messages from the dashboard via TCP.
-        // once we have a message, spawn a new thread to handle each one
-    });
+        // TODO: maybe configure this IP number?
+        let address = "127.0.0.1:1234";
+        let listener = TcpListener::bind(address)?;
+
+        println!("Successfully opened TCP listener on address {address}");
+        println!("Handling clients...");
+
+        for mut from_dash in listener.incoming().flatten() {
+            *to_dash.lock()? = Some(TcpStream::connect(from_dash.peer_addr()?)?);
+            handle_client(
+                &mut from_dash,
+                to_dash_ref,
+                config_ref,
+                driver_lines_ref,
+                cmd_file_ref,
+                state_ref,
+            )?;
+        }
+
+        Ok::<(), ControllerError>(())
+    })?;
     // successful termination!
     Ok(())
+}
+
+/// Handle a single dashboard client.
+fn handle_client(
+    from_dash: &mut impl Read,
+    to_dash: &Mutex<Option<impl Write>>,
+    config: &Configuration,
+    driver_lines: &[impl GpioPin],
+    cmd_log_file: &mut impl Write,
+    state_ref: &StateGuard,
+) -> Result<(), ControllerError> {
+    todo!()
 }
