@@ -60,7 +60,7 @@ pub fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
     configuration: &'a Configuration,
-    driver_lines: &'a [impl GpioPin + std::marker::Sync],
+    driver_lines: &'a [impl GpioPin + Sync],
     log_files: &mut [impl Write],
     adcs: &[impl Adc],
     state: &'a StateGuard,
@@ -462,14 +462,13 @@ mod tests {
             });
 
             // give the thread enough time to read values
-            sleep(Duration::from_millis(300));
+            sleep(Duration::from_millis(200));
 
             // check that we are currently e-stopping
             assert_eq!(state.status().unwrap(), ControllerState::EStopping);
 
-            while state.move_to(ControllerState::Quit).is_err() {
-                // kill the thread
-            }
+            // continually attempt to kill the thread
+            while state.move_to(ControllerState::Quit).is_err() {}
         });
     }
 }

@@ -176,3 +176,192 @@ fn perform_actions(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{io::Cursor, thread::scope};
+
+    use crate::hardware::ListenerPin;
+
+    use super::*;
+
+    #[test]
+    /// Test that state transitions are performed correctly during ignition.
+    fn ignition_state_transitions() {
+        let config = r#"{
+            "frequency_status": 1,
+            "log_buffer_size": 1,
+            "sensor_groups": [],
+            "pre_ignite_time": 500,
+            "post_ignite_time": 500,
+            "drivers": [],
+            "ignition_sequence": [
+                {
+                    "type": "Sleep",
+                    "duration": {
+                        "secs": 0,
+                        "nanos": 500000000
+                    }
+                }
+            ],
+            "estop_sequence": [],
+            "spi_mosi": 0,
+            "spi_miso": 0,
+            "spi_clk": 0,
+            "spi_frequency_clk": 50000,
+            "adc_cs": []
+        }"#;
+
+        let mut cfg_cursor = Cursor::new(config);
+        let config = Configuration::parse(&mut cfg_cursor).unwrap();
+
+        let driver_lines: [ListenerPin; 0] = [];
+
+        let state = StateGuard::new(ControllerState::Standby);
+        let state_ref = &state;
+
+        scope(|s| {
+            s.spawn(move || ignition(&config, &driver_lines, state_ref).unwrap());
+
+            sleep(Duration::from_millis(250));
+            assert_eq!(state.status().unwrap(), ControllerState::PreIgnite);
+
+            sleep(Duration::from_millis(500));
+            assert_eq!(state.status().unwrap(), ControllerState::Ignite);
+
+            sleep(Duration::from_millis(500));
+            assert_eq!(state.status().unwrap(), ControllerState::PostIgnite);
+
+            sleep(Duration::from_millis(500));
+            assert_eq!(state.status().unwrap(), ControllerState::Standby);
+        });
+    }
+
+    #[test]
+    /// Test that valve actuations are performed correctly during ignition.
+    fn ignition_actuation() {
+        let config = r#"{
+            "frequency_status": 1,
+            "log_buffer_size": 1,
+            "sensor_groups": [],
+            "pre_ignite_time": 0,
+            "post_ignite_time": 0,
+            "drivers": [],
+            "ignition_sequence": [
+                {
+                    "type": "Actuate",
+                    "driver_id": 0,
+                    "state": true
+                },
+                {
+                    "type": "Actuate",
+                    "driver_id": 0,
+                    "state": false
+                }
+            ],
+            "estop_sequence": [],
+            "spi_mosi": 0,
+            "spi_miso": 0,
+            "spi_clk": 0,
+            "spi_frequency_clk": 50000,
+            "adc_cs": []
+        }"#;
+
+        let mut cfg_cursor = Cursor::new(config);
+        let config = Configuration::parse(&mut cfg_cursor).unwrap();
+        let driver_lines = [ListenerPin::new()];
+        let state = StateGuard::new(ControllerState::Standby);
+
+        ignition(&config, &driver_lines, &state).unwrap();
+
+        assert_eq!(driver_lines[0].history().as_slice(), [true, false]);
+    }
+
+    #[test]
+    /// Test that the correct sequence of state transistions are performed
+    /// during an emergency stop.
+    fn estop_state_transitions() {
+        let config = r#"{
+            "frequency_status": 1,
+            "log_buffer_size": 1,
+            "sensor_groups": [],
+            "pre_ignite_time": 500,
+            "post_ignite_time": 500,
+            "drivers": [],
+            "ignition_sequence": [],
+            "estop_sequence": [
+                {
+                    "type": "Sleep",
+                    "duration": {
+                        "secs": 0,
+                        "nanos": 500000000
+                    }
+                }
+            ],
+            "spi_mosi": 0,
+            "spi_miso": 0,
+            "spi_clk": 0,
+            "spi_frequency_clk": 50000,
+            "adc_cs": []
+        }"#;
+
+        let mut cfg_cursor = Cursor::new(config);
+        let config = Configuration::parse(&mut cfg_cursor).unwrap();
+
+        let driver_lines: [ListenerPin; 0] = [];
+
+        let state = StateGuard::new(ControllerState::Standby);
+        let state_ref = &state;
+
+        scope(|s| {
+            s.spawn(move || emergency_stop(&config, &driver_lines, state_ref).unwrap());
+
+            sleep(Duration::from_millis(250));
+            assert_eq!(state.status().unwrap(), ControllerState::EStopping);
+
+            sleep(Duration::from_millis(500));
+            assert_eq!(state.status().unwrap(), ControllerState::Standby);
+        });
+    }
+
+    #[test]
+    /// Test that driver actuations are performed correctly during emergency
+    /// stop.
+    fn estop_actuation() {
+        let config = r#"{
+            "frequency_status": 1,
+            "log_buffer_size": 1,
+            "sensor_groups": [],
+            "pre_ignite_time": 0,
+            "post_ignite_time": 0,
+            "drivers": [],
+            "ignition_sequence": [],
+            "estop_sequence": [
+                {
+                    "type": "Actuate",
+                    "driver_id": 0,
+                    "state": true
+                },
+                {
+                    "type": "Actuate",
+                    "driver_id": 0,
+                    "state": false
+                }
+            ],
+            "spi_mosi": 0,
+            "spi_miso": 0,
+            "spi_clk": 0,
+            "spi_frequency_clk": 50000,
+            "adc_cs": []
+        }"#;
+
+        let mut cfg_cursor = Cursor::new(config);
+        let config = Configuration::parse(&mut cfg_cursor).unwrap();
+        let driver_lines = [ListenerPin::new()];
+        let state = StateGuard::new(ControllerState::Standby);
+
+        emergency_stop(&config, &driver_lines, &state).unwrap();
+
+        assert_eq!(driver_lines[0].history().as_slice(), [true, false]);
+    }
+}

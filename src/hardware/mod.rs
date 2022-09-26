@@ -5,7 +5,10 @@
 
 pub mod spi;
 
-use std::{sync::Mutex, time::Duration};
+use std::{
+    sync::{Mutex, MutexGuard},
+    time::Duration,
+};
 
 use gpio_cdev::{Line, LineRequestFlags};
 
@@ -67,6 +70,7 @@ pub struct Mcp3208<'a> {
     device: spi::Device<'a>,
 }
 
+#[derive(Default)]
 /// A structure for testing GPIO writes.
 ///
 /// A `ListenerPin` stores the history of all writes to it.
@@ -95,6 +99,24 @@ impl<'a> Mcp3208<'a> {
             device.clock_period() > Duration::from_micros(1_000_000 / Mcp3208::SPI_MIN_FREQUENCY)
         );
         Mcp3208 { device }
+    }
+}
+
+impl ListenerPin {
+    #[must_use]
+    /// Construct a new `ListenerPin` with no history.
+    pub fn new() -> ListenerPin {
+        ListenerPin::default()
+    }
+
+    /// Get access to the history inside this pin.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the internal lock of this structure is
+    /// poisoned.
+    pub fn history(&self) -> MutexGuard<Vec<bool>> {
+        self.0.lock().unwrap()
     }
 }
 

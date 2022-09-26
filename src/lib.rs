@@ -121,7 +121,7 @@ impl StateGuard {
                 old_state == ControllerState::Standby
             }
             ControllerState::Ignite => old_state == ControllerState::PreIgnite,
-            ControllerState::PostIgnite => old_state == ControllerState::PostIgnite,
+            ControllerState::PostIgnite => old_state == ControllerState::Ignite,
             ControllerState::EStopping => true,
         };
 
