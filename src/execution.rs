@@ -59,7 +59,7 @@ pub fn handle_command(
                 .send(&Message::Ready)
                 .map_err(|_| ControllerError::Io)?;
         }
-        Command::Actuate { driver_id, state } => actuate_driver(driver_lines, *driver_id, *state)?,
+        Command::Actuate { driver_id, value } => actuate_driver(driver_lines, *driver_id, *value)?,
         Command::Ignition => ignition(configuration, driver_lines, state)?,
         Command::EmergencyStop => emergency_stop(configuration, driver_lines, state)?,
     };
@@ -133,7 +133,7 @@ fn ignition(
     Ok(())
 }
 
-/// Actuate a given driver to a given state using GPIO cdev to interface with OS.
+/// Actuate a given driver to a given value using GPIO cdev to interface with OS.
 ///
 /// # Inputs
 ///
@@ -141,8 +141,9 @@ fn ignition(
 /// * `driver_id`: The ID of the driver to be actuated.
 ///     An ID is an index into `configuration.drivers` for the associated driver.
 ///     It is also the same index into `driver_lines`.
-/// * `state`: The state that the driver should be actuated to.
-///     `state` should be `true` to get a high value on the GPIO pin, and `false` for a low value.
+/// * `value`: The logic level that the driver should be actuated to.
+///     `value` should be `true` to get a high value on the GPIO pin, and
+///     `false` for a low value.
 ///
 /// # Errors
 ///
@@ -150,9 +151,9 @@ fn ignition(
 fn actuate_driver(
     driver_lines: &[impl GpioPin],
     driver_id: u8,
-    state: bool,
+    value: bool,
 ) -> Result<(), ControllerError> {
-    driver_lines[driver_id as usize].write("resfet-cmd-handler", state)?;
+    driver_lines[driver_id as usize].write("resfet-cmd-handler", value)?;
 
     Ok(())
 }
@@ -167,8 +168,8 @@ fn perform_actions(
 ) -> Result<(), ControllerError> {
     for action in actions {
         match action {
-            Action::Actuate { driver_id, state } => {
-                driver_lines[*driver_id as usize].write("resfet-action-seq", *state)?;
+            Action::Actuate { driver_id, value } => {
+                driver_lines[*driver_id as usize].write("resfet-action-seq", *value)?;
             }
             Action::Sleep { duration } => sleep(*duration),
         };
@@ -251,12 +252,12 @@ mod tests {
                 {
                     "type": "Actuate",
                     "driver_id": 0,
-                    "state": true
+                    "value": true
                 },
                 {
                     "type": "Actuate",
                     "driver_id": 0,
-                    "state": false
+                    "value": false
                 }
             ],
             "estop_sequence": [],
@@ -340,12 +341,12 @@ mod tests {
                 {
                     "type": "Actuate",
                     "driver_id": 0,
-                    "state": true
+                    "value": true
                 },
                 {
                     "type": "Actuate",
                     "driver_id": 0,
-                    "state": false
+                    "value": false
                 }
             ],
             "spi_mosi": 0,

@@ -121,16 +121,18 @@
             "pin": 32
         }
     ],
+    "pre_ignite_time": 1000,
+    "post_ignite_time": 5000,
     "ignition_sequence": [
         {
             "type": "Actuate",
             "driver_id": 0,
-            "state": true
+            "value": true
         },
         {
             "type": "Actuate",
             "driver_id": 5,
-            "state": true
+            "value": true
         },
         {
             "type": "Sleep",
@@ -142,24 +144,24 @@
         {
             "type": "Actuate",
             "driver_id": 0,
-            "state": false
+            "value": false
         },
         {
             "type": "Actuate",
             "driver_id": 5,
-            "state": false
+            "value": false
         }
     ],
     "estop_sequence": [
         {
             "type": "Actuate",
             "driver_id": 0,
-            "state": false
+            "value": false
         },
         {
             "type": "Actuate",
             "driver_id": 5,
-            "state": false
+            "value": false
         }
     ],
     "spi_mosi": 10,

@@ -74,7 +74,7 @@ pub struct Mcp3208<'a> {
 /// A structure for testing GPIO writes.
 ///
 /// A `ListenerPin` stores the history of all writes to it.
-/// When read from, a `ListenerPin` will return the last written state of the
+/// When read from, a `ListenerPin` will return the last written value of the
 /// pin.
 pub struct ListenerPin(Mutex<Vec<bool>>);
 

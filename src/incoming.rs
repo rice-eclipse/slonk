@@ -1,7 +1,7 @@
 //! Functions for handling incoming messages to the controller from the
 //! dashboard.
 use serde::Deserialize;
-use std::{io::Read, fmt::Display};
+use std::{fmt::Display, io::Read};
 
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -11,16 +11,16 @@ use std::{io::Read, fmt::Display};
 pub enum Command {
     /// The dashboard requested to know if the controller is ready to begin.
     Ready,
-    /// The dashboard requested that the driver be actuated to a state.
+    /// The dashboard requested that the driver be actuated to a logic level.
     Actuate {
         /// A string identifying the driver.
         /// The controller must verify that this string is a real driver.
         driver_id: u8,
-        /// The state that the driver must be actuated to.
+        /// The logic level that the driver must be actuated to.
         /// `true` corresponds to powered (i.e. connected to 12V), while `false`
         /// corresponds to unpowered (high-Z connection or grounding; dealer's
         /// choice).
-        state: bool,
+        value: bool,
     },
     /// The dashboard requested to begin an ignition procedure immediately.
     Ignition,
@@ -118,7 +118,7 @@ impl Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Command::Ready => write!(f, "ready"),
-            Command::Actuate { driver_id, state } => write!(f,"actuate {} {}", driver_id, state),
+            Command::Actuate { driver_id, value } => write!(f, "actuate {} {}", driver_id, value),
             Command::Ignition => write!(f, "ignition"),
             Command::EmergencyStop => write!(f, "estop"),
         }
@@ -166,13 +166,13 @@ mod tests {
         let message = r#"{
             "type": "Actuate",
             "driver_id": 0,
-            "state": true
+            "value": true
         }"#;
         assert_eq!(
             parse_helper(message),
             Ok(Command::Actuate {
                 driver_id: 0,
-                state: true
+                value: true
             })
         );
     }

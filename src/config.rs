@@ -65,12 +65,12 @@ pub struct Driver {
 #[serde(tag = "type")]
 /// The set of actions that can be taken in an ignition or shutoff sequence.
 pub enum Action {
-    /// Actuate a driver to a state.
+    /// Actuate a driver to a logic level.
     Actuate {
         /// The identifier (i.e. index) of the driver to be actuated.
         driver_id: u8,
-        /// The state that the driver will be actuated to.
-        state: bool,
+        /// The logic level that the driver will be actuated to.
+        value: bool,
     },
     /// Sleep for a given amount of time.
     Sleep {
@@ -232,7 +232,7 @@ mod tests {
                 {
                     "type": "Actuate",
                     "driver_id": 0,
-                    "state": true
+                    "value": true
                 },
                 {
                     "type": "Sleep",
@@ -244,14 +244,14 @@ mod tests {
                 {
                     "type": "Actuate",
                     "driver_id": 0,
-                    "state": false
+                    "value": false
                 }
             ],
             "estop_sequence": [
                 {
                     "type": "Actuate",
                     "driver_id": 0,
-                    "state": false
+                    "value": false
                 }
             ],
             "spi_mosi": 26,
@@ -302,19 +302,19 @@ mod tests {
             ignition_sequence: vec![
                 Action::Actuate {
                     driver_id: 0,
-                    state: true,
+                    value: true,
                 },
                 Action::Sleep {
                     duration: Duration::from_secs(10),
                 },
                 Action::Actuate {
                     driver_id: 0,
-                    state: false,
+                    value: false,
                 },
             ],
             estop_sequence: vec![Action::Actuate {
                 driver_id: 0,
-                state: false,
+                value: false,
             }],
             spi_mosi: 26,
             spi_miso: 27,

@@ -175,8 +175,8 @@ An `actuate` operation has two extra fields:
 
 - `driver_id` - string: The identifier for the driver to be actuated.
 
-- `state` - boolean: The state the driver should be actuated to (`true` for
-  electrically powered and `false` for unpowered).
+- `value` - boolean: The logic level the driver should be actuated to (`true`
+  for electrically powered and `false` for unpowered).
 
 During the ignition procedure, the controller will execute each step in the
 ignition sequence configuration in order.
@@ -238,7 +238,7 @@ of a configuration apparent.
     {
       "type": "Actuate",
       "driver_id": 0,
-      "state": true
+      "value": true
     },
     {
       "type": "Sleep",
@@ -250,14 +250,14 @@ of a configuration apparent.
     {
       "type": "Actuate",
       "driver_id": 0,
-      "state": false
+      "value": false
     }
   ],
   "estop_sequence": [
     {
       "type": "Actuate",
       "driver_id": 0,
-      "state": false
+      "value": false
     }
   ],
   "spi_mosi": 26,
@@ -293,7 +293,7 @@ controller to receive from the dashboard:
 {
     "type": "Actuate",
     "driver_id": 0,
-    "state": true
+    "value": true
 }
 {
     "type": "Ignition",
@@ -327,17 +327,17 @@ All driver actuation messages will have the type `Actuate`.
   This ID is equal to the index of the driver in the original configuration
   object.
 
-- `state` - boolean: The state that the driver should be actuated to.
-  If `true`, the driver should be actuated to its electrically-powered state.
-  If `false`, the driver should be deactuated to its unpowered state.
-  If the driver state was already in the desired state, sending this message
+- `value` - boolean: The logic level that the driver should be actuated to.
+  If `true`, the driver should be actuated to its electrically-powered level.
+  If `false`, the driver should be deactuated to its unpowered level.
+  If the driver level was already in the desired level, sending this message
   would result in a silent no-op.
 
 ```json
 {
   "type": "Actuate",
   "driver_id": 0,
-  "state": true
+  "value": true
 }
 ```
 
@@ -434,17 +434,17 @@ will be all from the same sensor group.
 A `DriverValue` message will periodically sent to the dashboard at approximately
 the frequency specified in the `frequency_status` field of the
 configuration.
-It describes the current state of all the drivers.
+It describes the current values of all the drivers.
 
-- `state` - array. An array of booleans, each describing the state of one
+- `values` - array. An array of booleans, each describing the logic level of one
   driver.
-  Each index in the `state` array corresponds to the ID of each driver, which
+  Each index in the `values` array corresponds to the ID of each driver, which
   is also its index in the original configuration object's list of drivers.
 
 ```json
 {
   "type": "DriverValue",
-  "state": [false, true, false]
+  "values": [false, true, false]
 }
 ```
 

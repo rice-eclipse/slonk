@@ -28,13 +28,13 @@ pub enum Message<'a> {
         /// The readings which were created.
         readings: &'a [SensorReading],
     },
-    /// A driver state message.
-    /// Describes the state of the drivers on the controller.
+    /// A driver values message.
+    /// Describes the logic levels of the drivers on the controller.
     DriverValue {
-        /// The state of each driver.
+        /// The logic level of each driver.
         /// Each index corresponds to the driver at the same index in the
         /// original configuration object.
-        state: Vec<bool>,
+        values: Vec<bool>,
     },
     /// A display message, which will write out a string to the dashboard.
     Display {
@@ -212,14 +212,14 @@ mod tests {
         serialize_helper(
             r#"{
                 "type": "DriverValue",
-                "state": [
+                "values": [
                     false,
                     true,
                     false
                 ]
             }"#,
             &Message::DriverValue {
-                state: vec![false, true, false],
+                values: vec![false, true, false],
             },
         );
     }
