@@ -12,7 +12,7 @@ use crate::{
     config::Configuration,
     execution::emergency_stop,
     hardware::{Adc, GpioPin},
-    outgoing::{Message, SensorReading},
+    outgoing::{DashChannel, Message, SensorReading},
     ControllerError, ControllerState, StateGuard,
 };
 
@@ -64,7 +64,7 @@ pub fn sensor_listen<'a>(
     log_files: &mut [impl Write],
     adcs: &[impl Adc],
     state: &'a StateGuard,
-    dashboard_stream: &'a Mutex<Option<impl Write>>,
+    dashboard_stream: &'a Mutex<DashChannel<impl Write, impl Write>>,
 ) -> Result<(), ControllerError> {
     assert!(usize::from(group_id) < configuration.sensor_groups.len());
 
@@ -138,26 +138,24 @@ pub fn sensor_listen<'a>(
         // transmit data to the dashboard if it's been long enough since our
         // last transmission
         if SystemTime::now() > last_transmission_time + transmission_period {
-            if let Some(stream) = dashboard_stream.lock()?.as_mut() {
-                serde_json::to_writer(
-                    stream,
-                    // some iterator hackery to get things in the right shape
-                    &Message::SensorValue {
-                        group_id,
-                        readings: &transmission_readings
-                            .iter()
-                            .enumerate()
-                            .filter_map(|(sensor_id, opt)| {
-                                #[allow(clippy::cast_possible_truncation)]
-                                opt.map(|(time, reading)| SensorReading {
-                                    sensor_id: sensor_id as u8,
-                                    reading,
-                                    time,
-                                })
+            let mut channel_guard = dashboard_stream.lock()?;
+            if channel_guard.has_target() {
+                // send message to dashboard
+                channel_guard.send(&Message::SensorValue {
+                    group_id,
+                    readings: &transmission_readings
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(sensor_id, opt)| {
+                            #[allow(clippy::cast_possible_truncation)]
+                            opt.map(|(time, reading)| SensorReading {
+                                sensor_id: sensor_id as u8,
+                                reading,
+                                time,
                             })
-                            .collect::<Vec<_>>(),
-                    },
-                )?;
+                        })
+                        .collect::<Vec<_>>(),
+                })?;
             }
 
             last_transmission_time = SystemTime::now();
@@ -305,7 +303,17 @@ mod tests {
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
         let state = StateGuard::new(ControllerState::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
-        let output_stream = Mutex::new(Some(Vec::new()));
+        // log file of outputs
+        let mut output_log = Vec::new();
+        // stream of outgoing messages
+        let mut output_stream_buf = Vec::new();
+        let output_stream = Mutex::new(DashChannel::<&mut Vec<u8>, &mut Vec<u8>>::new(
+            &mut output_log,
+        ));
+        output_stream
+            .lock()
+            .unwrap()
+            .set_channel(&mut output_stream_buf);
         let driver_lines: [gpio_cdev::Line; 0] = [];
 
         // actual magic happens here
@@ -338,8 +346,7 @@ mod tests {
 
         // validate the one sensor reading that was sent to our dummy dashboard
 
-        let json_val: Value =
-            serde_json::from_slice(output_stream.lock().unwrap().as_deref().unwrap()).unwrap();
+        let json_val: Value = serde_json::from_slice(&output_stream_buf).unwrap();
 
         let json_obj = json_val.as_object().unwrap();
 
@@ -442,7 +449,7 @@ mod tests {
 
         let state = StateGuard::new(ControllerState::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
-        let output_stream: Mutex<Option<Cursor<Vec<u8>>>> = Mutex::new(None);
+        let output_stream = Mutex::new(DashChannel::<Vec<u8>, Vec<u8>>::new(Vec::new()));
         let driver_lines: [gpio_cdev::Line; 0] = [];
 
         // actual magic happens here

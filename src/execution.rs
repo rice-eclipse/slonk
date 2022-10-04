@@ -4,7 +4,7 @@ use crate::{
     config::{Action, Configuration},
     hardware::GpioPin,
     incoming::Command,
-    outgoing::Message,
+    outgoing::{DashChannel, Message},
     ControllerError, ControllerState, StateGuard,
 };
 use std::{
@@ -42,7 +42,7 @@ pub fn handle_command(
     configuration: &Configuration,
     driver_lines: &[impl GpioPin],
     state: &StateGuard,
-    dashboard_stream: &Mutex<Option<impl Write>>,
+    dashboard_stream: &Mutex<DashChannel<impl Write, impl Write>>,
 ) -> Result<(), ControllerError> {
     let time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -54,10 +54,10 @@ pub fn handle_command(
     match cmd {
         Command::Ready => {
             // write "ready" to the dashboard
-            let mut dashboard_guard = dashboard_stream.lock()?;
-            if let Some(writer) = dashboard_guard.as_mut() {
-                serde_json::to_writer(writer, &Message::Ready).map_err(|_| ControllerError::Io)?;
-            }
+            dashboard_stream
+                .lock()?
+                .send(&Message::Ready)
+                .map_err(|_| ControllerError::Io)?;
         }
         Command::Actuate { driver_id, state } => actuate_driver(driver_lines, *driver_id, *state)?,
         Command::Ignition => ignition(configuration, driver_lines, state)?,

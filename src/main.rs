@@ -14,6 +14,7 @@ use resfet_controller_2::{
         spi::{Bus, Device},
         GpioPin, Mcp3208,
     },
+    outgoing::DashChannel,
     thread::sensor_listen,
     ControllerError, ControllerState, StateGuard,
 };
@@ -68,8 +69,7 @@ fn main() -> Result<(), ControllerError> {
     }
 
     // create log file for commands that have been executed
-    let cmd_log_path = PathBuf::from_iter(&[logs_path, "commands.csv"]);
-    let mut cmd_file = File::create(&cmd_log_path)?;
+    let mut cmd_file = File::create(PathBuf::from_iter(&[logs_path, "commands.csv"]))?;
     let cmd_file_ref = &mut cmd_file;
 
     println!("Successfully created log files");
@@ -80,7 +80,9 @@ fn main() -> Result<(), ControllerError> {
 
     // when a client connects, the inner value of this mutex will be `Some`
     // containing a TCP stream to the dashboard
-    let to_dash = Mutex::new(None);
+    let to_dash = Mutex::new(DashChannel::new(File::create(PathBuf::from_iter(&[
+        logs_path, "sent.csv",
+    ]))?));
     let to_dash_ref = &to_dash;
 
     let mut gpio_chip = Chip::new("/dev/gpiochip0")?;
@@ -130,7 +132,9 @@ fn main() -> Result<(), ControllerError> {
         println!("Handling clients...");
 
         for mut from_dash in listener.incoming().flatten() {
-            *to_dash.lock()? = Some(TcpStream::connect(from_dash.peer_addr()?)?);
+            to_dash
+                .lock()?
+                .set_channel(TcpStream::connect(from_dash.peer_addr()?)?);
             handle_client(
                 &mut from_dash,
                 to_dash_ref,
@@ -150,7 +154,7 @@ fn main() -> Result<(), ControllerError> {
 /// Handle a single dashboard client.
 fn handle_client(
     from_dash: &mut impl Read,
-    to_dash: &Mutex<Option<impl Write>>,
+    to_dash: &Mutex<DashChannel<impl Write, impl Write>>,
     config: &Configuration,
     driver_lines: &[impl GpioPin],
     cmd_log_file: &mut impl Write,

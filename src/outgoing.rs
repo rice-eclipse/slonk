@@ -1,11 +1,11 @@
 //! Specification of "outbound" parts of the API, which travel from controller
 //! to dashboard.
 
-use std::time::SystemTime;
+use std::{io::Write, time::SystemTime};
 
 use serde::Serialize;
 
-use crate::config::Configuration;
+use crate::{config::Configuration, ControllerError};
 
 #[derive(Serialize)]
 #[serde(tag = "type")]
@@ -81,6 +81,83 @@ pub enum ErrorCause<'a> {
     },
     /// The OS denied permission for some functionality of the controller.
     Permission,
+}
+
+/// A channel which can write to the dashboard.
+/// It contains a writer for a channel to the dashboard and to a message log.
+///
+/// # Types
+///
+/// * `C`: the type of the channel to the dashboard.
+/// * `M`: the type of the log file to be written to.
+pub struct DashChannel<C: Write, M: Write> {
+    /// A channel for the dashboard.
+    /// If writing to this channel fails, it will be immediately overwritten
+    /// with `None`.
+    /// When `dash_channel` is `None`, nothing will be written.
+    dash_channel: Option<C>,
+    /// The log file for all messages that are sent.
+    message_log: M,
+}
+
+impl<C: Write, M: Write> DashChannel<C, M> {
+    /// Construct a new `DashChannel` with no outgoing channel.
+    pub fn new(message_log: M) -> DashChannel<C, M> {
+        DashChannel {
+            dash_channel: None,
+            message_log,
+        }
+    }
+
+    /// Write a message to the dashboard.
+    /// After writing the message, log that the message was written.
+    ///
+    /// If writing the message to the dashboard
+    ///     
+    /// # Errors
+    ///
+    /// This function will return an `Err` if we are unable to write to the
+    /// message log.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the current time is before the UNIX epoch.
+    pub fn send(&mut self, message: &Message) -> Result<(), ControllerError> {
+        if let Some(ref mut dash_writer) = self.dash_channel {
+            if serde_json::to_writer(dash_writer, message).is_ok() {
+                // log that we sent this message to the dashboard
+                // first, mark the time
+                write!(
+                    self.message_log,
+                    "{},",
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
+                )?;
+                // then, the message
+                serde_json::to_writer(&mut self.message_log, message)?;
+                // then a trailing newline
+                writeln!(self.message_log)?;
+            } else {
+                // failed to send message, so the client must have closed.
+                self.dash_channel = None;
+            };
+        }
+
+        Ok(())
+    }
+
+    /// Determine whether this channel actually has a target to send messages
+    /// to.
+    pub fn has_target(&self) -> bool {
+        self.dash_channel.is_some()
+    }
+
+    /// Set the outgoing channel for this stream to be `channel`.
+    pub fn set_channel(&mut self, channel: C) {
+        self.dash_channel = Some(channel);
+    }
 }
 
 #[cfg(test)]
