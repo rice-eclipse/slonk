@@ -35,7 +35,8 @@ use crate::{
 /// * `configuration`: The primary configuration of the controller.
 /// * `driver_lines`: The GPIO lines for each driver.
 /// * `log_files`: Handles for log files associated with the sensors in this
-///     sensor group. Each index corresponds exactly to its associated index in the group.
+///     sensor group.
+///     Each index corresponds exactly to its associated index in the group.
 /// * `state`: The state of the whole system.
 ///     If a sensor enters an invalid value during ignition, this thread will
 ///     automatically update the state as needed.

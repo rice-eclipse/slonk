@@ -3,11 +3,11 @@
 use std::sync::{PoisonError, RwLock};
 
 pub mod config;
+pub mod data;
 pub mod execution;
 pub mod hardware;
 pub mod incoming;
 pub mod outgoing;
-pub mod thread;
 
 /// A guard for controller state which can be used to notify other threads of
 /// changes to controller state.

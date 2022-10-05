@@ -10,12 +10,12 @@ use std::{
 use gpio_cdev::Chip;
 use resfet_controller_2::{
     config::Configuration,
+    data::sensor_listen,
     hardware::{
         spi::{Bus, Device},
         GpioPin, Mcp3208,
     },
     outgoing::DashChannel,
-    thread::sensor_listen,
     ControllerError, ControllerState, StateGuard,
 };
 
