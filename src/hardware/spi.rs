@@ -118,13 +118,7 @@ impl<'a> Device<'a> {
             // Iterate in reverse because we are performing a big endian
             // transfer
             for bit_idx in (0..8).rev() {
-                if (1 << bit_idx) & byte_out == 0 {
-                    // write a low bit to MOSI
-                    handle_mosi.set_value(0)?;
-                } else {
-                    // write a high bit to MOSI
-                    handle_mosi.set_value(1)?;
-                }
+                handle_mosi.set_value((1 << bit_idx & byte_out) >> bit_idx)?;
                 // perform half a clock wait
                 sleep(self.bus.period / 2);
                 // rising edge on the clock corresponds to read from device

@@ -270,12 +270,12 @@ mod tests {
 
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
-        let driver_lines = [ListenerPin::new()];
+        let driver_lines = [ListenerPin::new(false)];
         let state = StateGuard::new(ControllerState::Standby);
 
         ignition(&config, &driver_lines, &state).unwrap();
 
-        assert_eq!(driver_lines[0].history().as_slice(), [true, false]);
+        assert_eq!(driver_lines[0].history().as_slice(), [false, true, false]);
     }
 
     #[test]
@@ -358,11 +358,11 @@ mod tests {
 
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
-        let driver_lines = [ListenerPin::new()];
+        let driver_lines = [ListenerPin::new(false)];
         let state = StateGuard::new(ControllerState::Standby);
 
         emergency_stop(&config, &driver_lines, &state).unwrap();
 
-        assert_eq!(driver_lines[0].history().as_slice(), [true, false]);
+        assert_eq!(driver_lines[0].history().as_slice(), [false, true, false]);
     }
 }

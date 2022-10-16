@@ -70,7 +70,6 @@ pub struct Mcp3208<'a> {
     device: spi::Device<'a>,
 }
 
-#[derive(Default)]
 /// A structure for testing GPIO writes.
 ///
 /// A `ListenerPin` stores the history of all writes to it.
@@ -104,9 +103,9 @@ impl<'a> Mcp3208<'a> {
 
 impl ListenerPin {
     #[must_use]
-    /// Construct a new `ListenerPin` with no history.
-    pub fn new() -> ListenerPin {
-        ListenerPin::default()
+    /// Construct a new `ListenerPin` with only one reading in its history.
+    pub fn new(last_value: bool) -> ListenerPin {
+        ListenerPin(Mutex::new(vec![last_value]))
     }
 
     /// Get access to the history inside this pin.
@@ -176,9 +175,9 @@ impl GpioPin for Line {
     }
 
     fn write(&self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
-        let int_val = if value { 1 } else { 0 };
-        self.request(LineRequestFlags::OUTPUT, int_val, consumer)?
-            .set_value(int_val)?;
+        let int_value = u8::from(value);
+        self.request(LineRequestFlags::OUTPUT, int_value, consumer)?
+            .set_value(int_value)?;
 
         Ok(())
     }
