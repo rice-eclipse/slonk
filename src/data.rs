@@ -186,6 +186,70 @@ pub fn sensor_listen<'a>(
     Ok(())
 }
 
+#[allow(dead_code)]
+/// Periodically check in on the status of the drivers, and log that status.
+/// Will also transmit that driver status to the dashboard.
+///
+/// # Inputs
+///
+/// * `configuration`: The configuration for the current mode of the controller.
+/// * `driver_lines`: The driver GPIO pins.
+/// * `log_file`: The file to which logs should be written.
+///     Information will be written to the log file in the following format:
+///     ```text
+///      {time},{driver0_status},{driver1_status},
+///
+///     ```
+///     with one row for every sample.
+///     `{time}` is the number of nanoseconds since the UNIX epoch.
+/// * `state`: The overall system state.
+///     This function will only return after `State` transitions to
+///     `ControllerState::Quit`.
+/// * `dashboard_stream`: A channel by which messages can be sent to the
+///     dashboard.
+///
+/// # Errors
+/// TODO examine all possible sources of error
+///
+/// # Panics
+pub fn driver_status_listen(
+    configuration: &Configuration,
+    driver_lines: &[impl GpioPin],
+    log_file: &mut impl Write,
+    state: &StateGuard,
+    dashboard_stream: &Mutex<DashChannel<impl Write, impl Write>>,
+) -> Result<(), ControllerError> {
+    // the time required to sleep
+    let sleep_time = Duration::from_secs(1) / configuration.frequency_status;
+    let mut driver_states = vec![false; driver_lines.len()];
+    while state.status()? != ControllerState::Quit {
+        // read off the states of the drivers
+        let read_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
+        for (driver_line, state_ref) in driver_lines.iter().zip(&mut driver_states) {
+            *state_ref = driver_line.read("resfet-driver-status")?;
+        }
+
+        // write driver status information
+        write!(log_file, "{},", read_time.as_nanos())?;
+        for driver_state in &driver_states {
+            write!(log_file, "{driver_state},")?;
+        }
+        writeln!(log_file)?;
+
+        // optionally transmit to dashboard
+        dashboard_stream.lock()?.send(&Message::DriverValue {
+            values: &driver_states,
+        })?;
+
+        // take a nap until we are ready to send another message
+        sleep(sleep_time);
+    }
+
+    Ok(())
+}
+
 /// Write a new log datum to the sensor log file.
 ///
 /// # Inputs

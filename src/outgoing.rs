@@ -34,7 +34,7 @@ pub enum Message<'a> {
         /// The logic level of each driver.
         /// Each index corresponds to the driver at the same index in the
         /// original configuration object.
-        values: Vec<bool>,
+        values: &'a [bool],
     },
     /// A display message, which will write out a string to the dashboard.
     Display {
@@ -219,7 +219,7 @@ mod tests {
                 ]
             }"#,
             &Message::DriverValue {
-                values: vec![false, true, false],
+                values: &[false, true, false],
             },
         );
     }
