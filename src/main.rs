@@ -10,7 +10,7 @@ use std::{
 use gpio_cdev::Chip;
 use resfet_controller_2::{
     config::Configuration,
-    data::sensor_listen,
+    data::{driver_status_listen, sensor_listen},
     hardware::{
         spi::{Bus, Device},
         GpioPin, Mcp3208,
@@ -120,6 +120,16 @@ fn main() -> Result<(), ControllerError> {
                 )
             });
         }
+
+        s.spawn(move || {
+            driver_status_listen(
+                config_ref,
+                driver_lines_ref,
+                todo!(),
+                state_ref,
+                to_dash_ref,
+            )
+        });
 
         println!("Successfully spawned sensor listener threads.");
         println!("Opening network...");
