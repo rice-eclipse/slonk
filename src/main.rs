@@ -72,6 +72,9 @@ fn main() -> Result<(), ControllerError> {
     let mut cmd_file = File::create(PathBuf::from_iter(&[logs_path, "commands.csv"]))?;
     let cmd_file_ref = &mut cmd_file;
 
+    let mut drivers_file = File::create(PathBuf::from_iter(&[logs_path, "drivers.csv"]))?;
+    let drivers_file_ref = &mut drivers_file;
+
     println!("Successfully created log files");
     println!("Now spawning sensor listener threads...");
 
@@ -125,7 +128,7 @@ fn main() -> Result<(), ControllerError> {
             driver_status_listen(
                 config_ref,
                 driver_lines_ref,
-                todo!(),
+                drivers_file_ref,
                 state_ref,
                 to_dash_ref,
             )
