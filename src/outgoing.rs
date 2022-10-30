@@ -44,7 +44,7 @@ pub enum Message<'a> {
     /// An error message for the dashboard to display for the user.
     Error {
         /// The root problem which caused the error to be sent.
-        cause: ErrorCause<'a>,
+        cause: ErrorCause,
         /// A diagnostic string providing information about the error.
         diagnostic: &'a str,
     },
@@ -64,13 +64,10 @@ pub struct SensorReading {
 #[derive(Serialize)]
 #[serde(tag = "type")]
 /// The set of error causes that can be displayed to the dashboard.
-pub enum ErrorCause<'a> {
+pub enum ErrorCause {
     /// A command from the dashboard was malformed.
     /// Send back a copy of the incorrect command.
-    Malformed {
-        /// The original message which failed to be parsed.
-        original_message: &'a str,
-    },
+    Malformed,
     /// A read from a sensor failed.
     /// Give the ID of the sensor which failed to be read.
     SensorFail {
@@ -246,15 +243,12 @@ mod tests {
                 "type": "Error",
                 "diagnostic": "expected key `driver_id` not found",
                 "cause": {
-                    "type": "Malformed",
-                    "original_message": "{\"type\": \"actuate\"}"
+                    "type": "Malformed"
                 }
             }"#,
             &Message::Error {
                 diagnostic: "expected key `driver_id` not found",
-                cause: ErrorCause::Malformed {
-                    original_message: "{\"type\": \"actuate\"}",
-                },
+                cause: ErrorCause::Malformed,
             },
         );
     }

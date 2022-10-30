@@ -11,11 +11,12 @@ use gpio_cdev::Chip;
 use resfet_controller_2::{
     config::Configuration,
     data::{driver_status_listen, sensor_listen},
+    execution::handle_command,
     hardware::{
         spi::{Bus, Device},
         GpioPin, Mcp3208,
     },
-    outgoing::DashChannel,
+    outgoing::{DashChannel, ErrorCause, Message},
     ControllerError, ControllerState, StateGuard,
 };
 
@@ -173,5 +174,20 @@ fn handle_client(
     cmd_log_file: &mut impl Write,
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
-    todo!()
+    loop {
+        let cmd = match serde_json::from_reader(&mut *from_dash) {
+            Ok(cmd) => cmd,
+            Err(_) => {
+                to_dash.lock()?.send(&Message::Error {
+                    cause: ErrorCause::Malformed,
+                    diagnostic: "illegal command! trying to carry on...",
+                })?;
+                continue;
+            }
+        };
+
+        // TODO figure out if we should do something other than returning on
+        // error case here.
+        handle_command(&cmd, cmd_log_file, config, driver_lines, state_ref, to_dash)?;
+    }
 }
