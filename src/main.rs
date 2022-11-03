@@ -175,15 +175,12 @@ fn handle_client(
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
     loop {
-        let cmd = match serde_json::from_reader(&mut *from_dash) {
-            Ok(cmd) => cmd,
-            Err(_) => {
-                to_dash.lock()?.send(&Message::Error {
-                    cause: ErrorCause::Malformed,
-                    diagnostic: "illegal command! trying to carry on...",
-                })?;
-                continue;
-            }
+        let Ok(cmd) = serde_json::from_reader(&mut *from_dash) else {
+            to_dash.lock()?.send(&Message::Error {
+                cause: ErrorCause::Malformed,
+                diagnostic: "illegal command! trying to carry on...",
+            })?;
+            continue;
         };
 
         // TODO figure out if we should do something other than returning on

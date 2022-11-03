@@ -162,6 +162,8 @@ fn actuate_driver(
 /// ignition.
 ///
 /// # Errors
+///
+/// TODO
 fn perform_actions(
     driver_lines: &[impl GpioPin],
     actions: &[Action],
