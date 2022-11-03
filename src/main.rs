@@ -47,13 +47,13 @@ fn main() -> Result<(), ControllerError> {
     let logs_path = args.get(1).ok_or(ControllerError::Args)?;
 
     // create path to log files directory
-    create_dir_all(&logs_path)?;
+    create_dir_all(logs_path)?;
     println!("Created directory {logs_path}");
 
     let mut sensor_log_files: Vec<Vec<File>> = Vec::new();
     for sensor_group in &config.sensor_groups {
         let mut group_files = Vec::new();
-        let sensor_group_path = PathBuf::from_iter(&[logs_path, &sensor_group.label]);
+        let sensor_group_path = PathBuf::from_iter([logs_path, &sensor_group.label]);
         // create subfolder for this sensor group
         create_dir_all(&sensor_group_path)?;
         println!("Created directory {:?}", sensor_group_path.as_os_str());
@@ -70,10 +70,10 @@ fn main() -> Result<(), ControllerError> {
     }
 
     // create log file for commands that have been executed
-    let mut cmd_file = File::create(PathBuf::from_iter(&[logs_path, "commands.csv"]))?;
+    let mut cmd_file = File::create(PathBuf::from_iter([logs_path, "commands.csv"]))?;
     let cmd_file_ref = &mut cmd_file;
 
-    let mut drivers_file = File::create(PathBuf::from_iter(&[logs_path, "drivers.csv"]))?;
+    let mut drivers_file = File::create(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
     let drivers_file_ref = &mut drivers_file;
 
     println!("Successfully created log files");
@@ -84,7 +84,7 @@ fn main() -> Result<(), ControllerError> {
 
     // when a client connects, the inner value of this mutex will be `Some`
     // containing a TCP stream to the dashboard
-    let to_dash = Mutex::new(DashChannel::new(File::create(PathBuf::from_iter(&[
+    let to_dash = Mutex::new(DashChannel::new(File::create(PathBuf::from_iter([
         logs_path, "sent.csv",
     ]))?));
     let to_dash_ref = &to_dash;
