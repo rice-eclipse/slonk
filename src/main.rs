@@ -16,7 +16,7 @@ use resfet_controller_2::{
         spi::{Bus, Device},
         GpioPin, Mcp3208,
     },
-    outgoing::{DashChannel, ErrorCause, Message},
+    outgoing::DashChannel,
     ControllerError, ControllerState, StateGuard,
 };
 
@@ -75,6 +75,9 @@ fn main() -> Result<(), ControllerError> {
 
     let mut drivers_file = File::create(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
     let drivers_file_ref = &mut drivers_file;
+
+    let mut errors_file = File::create(PathBuf::from_iter([logs_path, "errors.txt"]))?;
+    let errors_file_ref = &mut errors_file;
 
     println!("Successfully created log files");
     println!("Now spawning sensor listener threads...");
@@ -155,6 +158,7 @@ fn main() -> Result<(), ControllerError> {
                 config_ref,
                 driver_lines_ref,
                 cmd_file_ref,
+                errors_file_ref,
                 state_ref,
             )?;
         }
@@ -172,14 +176,16 @@ fn handle_client(
     config: &Configuration,
     driver_lines: &[impl GpioPin],
     cmd_log_file: &mut impl Write,
+    errors_file: &mut impl Write,
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
     loop {
         let Ok(cmd) = serde_json::from_reader(&mut *from_dash) else {
-            to_dash.lock()?.send(&Message::Error {
-                cause: ErrorCause::Malformed,
-                diagnostic: "illegal command! trying to carry on...",
-            })?;
+            #[allow(unused_must_use)] {
+                // if writing down an error happening fails, there is NOTHING 
+                // you can do to recover.
+                writeln!(errors_file, "illegal command received from dashboard");
+            }
             continue;
         };
 

@@ -41,13 +41,6 @@ pub enum Message<'a> {
         /// The message to display to the user.
         message: &'a str,
     },
-    /// An error message for the dashboard to display for the user.
-    Error {
-        /// The root problem which caused the error to be sent.
-        cause: ErrorCause,
-        /// A diagnostic string providing information about the error.
-        diagnostic: &'a str,
-    },
 }
 
 #[derive(Serialize)]
@@ -59,25 +52,6 @@ pub struct SensorReading {
     pub reading: u16,
     /// The time at which the sensor reading was created.
     pub time: SystemTime,
-}
-
-#[derive(Serialize)]
-#[serde(tag = "type")]
-/// The set of error causes that can be displayed to the dashboard.
-pub enum ErrorCause {
-    /// A command from the dashboard was malformed.
-    /// Send back a copy of the incorrect command.
-    Malformed,
-    /// A read from a sensor failed.
-    /// Give the ID of the sensor which failed to be read.
-    SensorFail {
-        /// The ID of the group which contains the failed sensor.
-        group_id: u8,
-        /// The ID of the sensor within the group which failed to be read.
-        sensor_id: u8,
-    },
-    /// The OS denied permission for some functionality of the controller.
-    Permission,
 }
 
 /// A channel which can write to the dashboard.
@@ -231,65 +205,6 @@ mod tests {
             }"#,
             &Message::Display {
                 message: "The weather today is expected to be mostly sunny, with a high of 73 degrees Fahrenheit."
-            },
-        );
-    }
-
-    #[test]
-    /// Test that a malformed error message is serialized correctly.
-    fn serialize_error_malformed() {
-        serialize_helper(
-            r#"{
-                "type": "Error",
-                "diagnostic": "expected key `driver_id` not found",
-                "cause": {
-                    "type": "Malformed"
-                }
-            }"#,
-            &Message::Error {
-                diagnostic: "expected key `driver_id` not found",
-                cause: ErrorCause::Malformed,
-            },
-        );
-    }
-
-    #[test]
-    /// Test that a failed sensor error message is serialized correctly.
-    fn serialize_sensor_fail() {
-        serialize_helper(
-            r#"{
-                "type": "Error",
-                "diagnostic": "SPI transfer for LC_MAIN failed",
-                "cause": {
-                    "type": "SensorFail",
-                    "group_id": 0,
-                    "sensor_id": 0
-                }
-            }"#,
-            &Message::Error {
-                diagnostic: "SPI transfer for LC_MAIN failed",
-                cause: ErrorCause::SensorFail {
-                    group_id: 0,
-                    sensor_id: 0,
-                },
-            },
-        );
-    }
-
-    #[test]
-    /// Test that a failed permission error message is serialized correctly.
-    fn serialize_permission() {
-        serialize_helper(
-            r#"{
-                "type": "Error",
-                "diagnostic": "could not write to log file `log_LC_MAIN.txt`",
-                "cause": {
-                    "type": "Permission"
-                }
-            }"#,
-            &Message::Error {
-                diagnostic: "could not write to log file `log_LC_MAIN.txt`",
-                cause: ErrorCause::Permission,
             },
         );
     }
