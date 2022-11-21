@@ -10,6 +10,7 @@ use std::{
 use gpio_cdev::Chip;
 use resfet_controller_2::{
     config::Configuration,
+    console::{LogLevel, UserLog},
     data::{driver_status_listen, sensor_listen},
     execution::handle_command,
     hardware::{
@@ -76,8 +77,11 @@ fn main() -> Result<(), ControllerError> {
     let mut drivers_file = File::create(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
     let drivers_file_ref = &mut drivers_file;
 
-    let mut errors_file = File::create(PathBuf::from_iter([logs_path, "errors.txt"]))?;
-    let errors_file_ref = &mut errors_file;
+    let user_log = UserLog::new(File::create(PathBuf::from_iter([
+        logs_path,
+        "console.txt",
+    ]))?);
+    let user_log_ref = &user_log;
 
     println!("Successfully created log files");
     println!("Now spawning sensor listener threads...");
@@ -158,7 +162,7 @@ fn main() -> Result<(), ControllerError> {
                 config_ref,
                 driver_lines_ref,
                 cmd_file_ref,
-                errors_file_ref,
+                user_log_ref,
                 state_ref,
             )?;
         }
@@ -176,15 +180,19 @@ fn handle_client(
     config: &Configuration,
     driver_lines: &[impl GpioPin],
     cmd_log_file: &mut impl Write,
-    errors_file: &mut impl Write,
+    user_log: &UserLog<impl Write>,
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
     loop {
-        let Ok(cmd) = serde_json::from_reader(&mut *from_dash) else {
+        let cmd_deser_result = serde_json::from_reader(&mut *from_dash);
+
+        let Ok(cmd) = cmd_deser_result else {
             #[allow(unused_must_use)] {
-                // if writing down an error happening fails, there is NOTHING 
-                // you can do to recover.
-                writeln!(errors_file, "illegal command received from dashboard");
+                // don't kill the process even if we get something bad
+                user_log.write(
+                    LogLevel::Critical, 
+                    &format!("encountered error while parsing message. future messages will likely not be parsed correctly: {cmd_deser_result:?}")
+                );
             }
             continue;
         };

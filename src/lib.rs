@@ -3,6 +3,7 @@
 use std::sync::{PoisonError, RwLock};
 
 pub mod config;
+pub mod console;
 pub mod data;
 pub mod execution;
 pub mod hardware;
