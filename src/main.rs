@@ -126,6 +126,7 @@ fn main() -> Result<(), ControllerError> {
                     config_ref,
                     driver_lines_ref,
                     &mut log_file_group,
+                    user_log_ref,
                     adcs_ref,
                     state_ref,
                     to_dash_ref,
@@ -138,6 +139,7 @@ fn main() -> Result<(), ControllerError> {
                 config_ref,
                 driver_lines_ref,
                 drivers_file_ref,
+                user_log_ref,
                 state_ref,
                 to_dash_ref,
             )

@@ -10,6 +10,7 @@ use std::{
 
 use crate::{
     config::Configuration,
+    console::UserLog,
     execution::emergency_stop,
     hardware::{Adc, GpioPin},
     outgoing::{DashChannel, Message, SensorReading},
@@ -63,6 +64,7 @@ pub fn sensor_listen<'a>(
     configuration: &'a Configuration,
     driver_lines: &'a [impl GpioPin + Sync],
     log_files: &mut [impl Write],
+    user_log: &UserLog<impl Write>,
     adcs: &[impl Adc],
     state: &'a StateGuard,
     dashboard_stream: &'a Mutex<DashChannel<impl Write, impl Write>>,
@@ -111,7 +113,14 @@ pub fn sensor_listen<'a>(
     while state.status()? != ControllerState::Quit {
         // read from each device
         for (idx, sensor) in group.sensors.iter().enumerate() {
-            let reading = adcs[usize::from(sensor.adc)].read(&consumer_name, sensor.channel)?;
+            let adc_read_result =
+                adcs[usize::from(sensor.adc)].read(&consumer_name, sensor.channel);
+            let Ok(reading) = adc_read_result else {
+                #[allow(unused_must_use)] {
+                    user_log.critical(&format!("unable to read {} due to error: {adc_read_result:?}", sensor.label));
+                }
+                continue;
+            };
             let read_time = SystemTime::now();
             most_recent_readings[idx].push_back((read_time, reading));
             transmission_readings[idx] = Some((read_time, reading));
@@ -126,7 +135,12 @@ pub fn sensor_listen<'a>(
             // if rolling average went out of bounds, immediately start
             // emergency stopping
             if let Some((min, max)) = sensor.range {
+                #[allow(unused_must_use)]
                 if rolling_avg < min || max < rolling_avg {
+                    user_log.warn(&format!(
+                        "Sensor {} was out of bounds with value {rolling_avg}, attempting emergency stop", 
+                        sensor.label
+                    ));
                     // oh no! a sensor is now in an illegal range!
                     // spin up another thread to emergency stop.
                     // this may return an error due to illegal transistion, but
@@ -142,7 +156,7 @@ pub fn sensor_listen<'a>(
             let mut channel_guard = dashboard_stream.lock()?;
             if channel_guard.has_target() {
                 // send message to dashboard
-                channel_guard.send(&Message::SensorValue {
+                let send_result = channel_guard.send(&Message::SensorValue {
                     group_id,
                     readings: &transmission_readings
                         .iter()
@@ -156,7 +170,12 @@ pub fn sensor_listen<'a>(
                             })
                         })
                         .collect::<Vec<_>>(),
-                })?;
+                });
+
+                #[allow(unused_must_use)]
+                if let Err(e) = send_result {
+                    user_log.warn(&format!("unable to transmit data to dashboard: {e:?}"));
+                }
             }
 
             last_transmission_time = SystemTime::now();
@@ -165,7 +184,13 @@ pub fn sensor_listen<'a>(
 
         for (sensor_id, reading_queue) in most_recent_readings.iter().enumerate() {
             if reading_queue.len() >= configuration.log_buffer_size {
-                write_sensor_log(&mut log_files[sensor_id], reading_queue)?;
+                #[allow(unused_must_use)]
+                if let Err(e) = write_sensor_log(&mut log_files[sensor_id], reading_queue) {
+                    user_log.warn(&format!(
+                        "unable to write data for sensor {}: {e:?}",
+                        group.sensors[sensor_id].label
+                    ));
+                }
             }
         }
 
@@ -216,6 +241,7 @@ pub fn driver_status_listen(
     configuration: &Configuration,
     driver_lines: &[impl GpioPin],
     log_file: &mut impl Write,
+    user_log: &UserLog<impl Write>,
     state: &StateGuard,
     dashboard_stream: &Mutex<DashChannel<impl Write, impl Write>>,
 ) -> Result<(), ControllerError> {
@@ -227,16 +253,28 @@ pub fn driver_status_listen(
         let read_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
-        for (driver_line, state_ref) in driver_lines.iter().zip(&mut driver_states) {
-            *state_ref = driver_line.read("resfet-driver-status")?;
+
+        for (driver_idx, (driver_line, state_ref)) in
+            driver_lines.iter().zip(&mut driver_states).enumerate()
+        {
+            match driver_line.read("resfet-driver-status") {
+                Ok(read_value) => *state_ref = read_value,
+                #[allow(unused_must_use)]
+                Err(e) => {
+                    user_log.warn(&format!(
+                        "Unable to read state of driver {driver_idx}: {e:?}"
+                    ));
+                }
+            }
         }
 
         // write driver status information
-        write!(log_file, "{},", read_time.as_nanos())?;
-        for driver_state in &driver_states {
-            write!(log_file, "{driver_state},")?;
+        #[allow(unused_must_use)]
+        if let Err(e) = write_driver_log(log_file, read_time, &driver_states) {
+            user_log.warn(&format!(
+                "Unable to write driver status information to log file: {e}"
+            ));
         }
-        writeln!(log_file)?;
 
         // optionally transmit to dashboard
         dashboard_stream.lock()?.send(&Message::DriverValue {
@@ -246,6 +284,31 @@ pub fn driver_status_listen(
         // take a nap until we are ready to send another message
         sleep(sleep_time);
     }
+
+    Ok(())
+}
+
+/// Write the status of the drivers to a log file.
+///
+/// # Inputs
+///
+/// * `log_file`: The file to which log information should be written.
+/// * `read_time`: The time at which the read of driver states occurred.
+/// * `driver_states`: The state of each driver.
+///
+/// # Errors
+///
+/// This function will return an `Err` if writing to the log file fails.
+fn write_driver_log(
+    log_file: &mut impl Write,
+    read_time: Duration,
+    driver_states: &[bool],
+) -> std::io::Result<()> {
+    write!(log_file, "{},", read_time.as_nanos())?;
+    for driver_state in driver_states {
+        write!(log_file, "{driver_state},")?;
+    }
+    writeln!(log_file)?;
 
     Ok(())
 }
@@ -391,6 +454,7 @@ mod tests {
                     &config,
                     &driver_lines,
                     &mut logs,
+                    &UserLog::new(Vec::<u8>::new()),
                     &adcs,
                     &state,
                     &output_stream,
@@ -527,6 +591,7 @@ mod tests {
                     &config,
                     &driver_lines,
                     &mut logs,
+                    &UserLog::new(Vec::<u8>::new()),
                     &adcs,
                     &state,
                     &output_stream,
