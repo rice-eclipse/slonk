@@ -8,7 +8,7 @@ use std::{
 };
 
 use gpio_cdev::Chip;
-use resfet_controller_2::{
+use slonk::{
     config::Configuration,
     console::UserLog,
     data::{driver_status_listen, sensor_listen},
@@ -21,7 +21,7 @@ use resfet_controller_2::{
     ControllerError, ControllerState, StateGuard,
 };
 
-/// The main function for the RESFET controller.
+/// The main function for the `slonk` controller.
 ///
 /// # Arguments
 ///
@@ -33,7 +33,7 @@ use resfet_controller_2::{
 /// files should be created.
 /// If the directory does not exist, it will be created.
 fn main() -> Result<(), ControllerError> {
-    println!("=== RESFET 2 by Rice Eclipse ===");
+    println!("=== slonk by Rice Eclipse ===");
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Use arguments to get configuration file
     let json_path = args.get(0).ok_or(ControllerError::Args)?;

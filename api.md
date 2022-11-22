@@ -1,16 +1,15 @@
-# RESFET Rewrite API Proposal
+# `slonk` Rewrite API Proposal
 
 Since we're rewriting the engine controller, we might as well rewrite the API.
-This proposal outlines a new API for RESFET's replacement, moving away from the
-RESFET's opaque, implementation-dependent approach.
+This proposal outlines a new API for `slonk`, moving away from RESFET's opaque, 
+implementation-dependent approach.
 
 ## Terms
 
-- _Dashboard_: the device running RESFET Dashboard. Acts as a client to the
+- _Dashboard_: the device running `slonkboard`. Acts as a client to the
   controller.
 
-- _Controller_: the device running the replacement for RESFET Engine Controller,
-  or whatever we call it.
+- _Controller_: the device running the replacement for `slonk`.
 
 - _Sensor_: For the sake of this API, a "sensor" is anything that can be read
   from an ADC and has a calibration.

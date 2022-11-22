@@ -25,10 +25,10 @@ In Terminal:
 1. Navigate to file location where you want to clone the repo to
 1. In the online repo, click the green “Code” dropdown button. Copy the SSH link.
 1. In terminal, run `git clone sshlinkhere`
-1. For example, if you want to clone the RESFET 2 repo,
+1. For example, if you want to clone the `slonk` repo,
 
 ```sh
-git clone git@github.com:rice-eclipse/resfet-controller-2.git
+git clone git@github.com:rice-eclipse/slonk.git
 ```
 
 ## Naming convention

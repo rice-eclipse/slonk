@@ -167,7 +167,7 @@ fn actuate_driver(
     value: bool,
 ) -> Result<(), ControllerError> {
     driver_lines[driver_id as usize]
-        .write("resfet-cmd-handler", value)
+        .write("slonk-cmd-handler", value)
         .map_err(std::convert::Into::into)
 }
 
@@ -184,7 +184,7 @@ fn perform_actions(
     for action in actions {
         match action {
             Action::Actuate { driver_id, value } => {
-                driver_lines[*driver_id as usize].write("resfet-action-seq", *value)?;
+                driver_lines[*driver_id as usize].write("slonk-action-seq", *value)?;
             }
             Action::Sleep { duration } => sleep(*duration),
         };

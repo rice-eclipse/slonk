@@ -1,4 +1,4 @@
-# RESFET Controller v2
+# `slonk`: a new engine controller software
 
 ## Motivation
 
@@ -12,17 +12,17 @@ less of a pain to work with.
 
 ## API
 
-The RESFET rewrite also includes a redesign for the API for communcations
-between the dashboard and controller.
+`slonk` also includes a redesign for the API for communcations between the 
+dashboard and controller.
 For further details, refer to
-[api.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/api.md).
+[api.md](https://github.com/rice-eclipse/slonk/blob/master/api.md).
 
 This documnent also explains the structure of configuration files.
 
 ## Installation and dependencies
 
-RESFET Controller v2 is written in Rust, and uses Cargo, the main Rust build
-system, to build and test.
+`slonk` is written in Rust, and uses Cargo, the main Rust build system, to 
+build and test.
 We recommend using [rustup](https://rustup.rs) to set up the Rust build
 environment.
 We will list any non-Cargo dependencies we add here (such as for C
@@ -33,7 +33,7 @@ interoperation).
 To build the release version of the code, navigate to the root directory of this
 repository and enter `cargo build --release`.
 To run the controller, either run `cargo run --release` or
-`./target/release/resfet_controller_2` after building.
+`./target/release/slonk` after building.
 
 The controller executable takes two arguments:
 
@@ -41,10 +41,10 @@ The controller executable takes two arguments:
 1. A path to the directory where logs will be stored.
 
 For example, the following command would run the engine controller for the Titan
-motor configuration and store logs in `../resfet-logs/my_test_logs`.
+motor configuration and store logs in `../slonk-logs/my_test_logs`.
 
 ```sh
-cargo run --release config/titan.json ../resfet-logs/my_test_logs
+cargo run --release config/titan.json ../slonk-logs/my_test_logs
 ```
 
 To run all tests, run `cargo test`.
@@ -54,5 +54,5 @@ To run all tests, run `cargo test`.
 To reduce chances of version control blunders, we've created standard git
 procedures.
 Refer to
-[git_procedures.md](https://github.com/rice-eclipse/resfet-controller-2/blob/master/git_procedures.md)
+[git_procedures.md](https://github.com/rice-eclipse/slonk/blob/master/git_procedures.md)
 for more details.

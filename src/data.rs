@@ -257,7 +257,7 @@ pub fn driver_status_listen(
         for (driver_idx, (driver_line, state_ref)) in
             driver_lines.iter().zip(&mut driver_states).enumerate()
         {
-            match driver_line.read("resfet-driver-status") {
+            match driver_line.read("slonk-driver-status") {
                 Ok(read_value) => *state_ref = read_value,
                 #[allow(unused_must_use)]
                 Err(e) => {

@@ -90,15 +90,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "resfet_controller_2"
-version = "0.1.0"
-dependencies = [
- "gpio-cdev",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ryu"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -133,6 +124,15 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "slonk"
+version = "0.1.0"
+dependencies = [
+ "gpio-cdev",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
