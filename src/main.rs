@@ -201,6 +201,14 @@ fn handle_client(
 
         // TODO figure out if we should do something other than returning on
         // error case here.
-        handle_command(&cmd, cmd_log_file, config, driver_lines, state_ref, to_dash)?;
+        handle_command(
+            &cmd,
+            cmd_log_file,
+            user_log,
+            config,
+            driver_lines,
+            state_ref,
+            to_dash,
+        )?;
     }
 }

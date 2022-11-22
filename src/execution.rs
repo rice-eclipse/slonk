@@ -2,6 +2,7 @@
 
 use crate::{
     config::{Action, Configuration},
+    console::UserLog,
     hardware::GpioPin,
     incoming::Command,
     outgoing::{DashChannel, Message},
@@ -39,6 +40,7 @@ use std::{
 pub fn handle_command(
     cmd: &Command,
     log_file: &mut impl Write,
+    user_log: &UserLog<impl Write>,
     configuration: &Configuration,
     driver_lines: &[impl GpioPin],
     state: &StateGuard,
@@ -47,9 +49,16 @@ pub fn handle_command(
     let time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    // Second column for execution status of command sent
-    writeln!(log_file, "{},request,{}", time.as_nanos(), cmd)?;
-    log_file.flush()?;
+
+    #[allow(unused_must_use)]
+    {
+        user_log.info(&format!("Executing command {cmd:?}"));
+    }
+
+    #[allow(unused_must_use)]
+    if let Err(e) = writeln!(log_file, "{},request,{}", time.as_nanos(), cmd) {
+        user_log.warn(&format!("Unable to log command {cmd} to log file: {e:?}"));
+    }
 
     match cmd {
         Command::Ready => {
@@ -67,9 +76,13 @@ pub fn handle_command(
     let time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    writeln!(log_file, "{},finish,{}", time.as_nanos(), cmd)?;
-    log_file.flush()?;
 
+    #[allow(unused_must_use)]
+    if let Err(e) = writeln!(log_file, "{},finish,{}", time.as_nanos(), cmd) {
+        user_log.warn(&format!(
+            "Unable to log completion of command {cmd} to log file: {e:?}"
+        ));
+    }
     Ok(())
 }
 
@@ -153,9 +166,9 @@ fn actuate_driver(
     driver_id: u8,
     value: bool,
 ) -> Result<(), ControllerError> {
-    driver_lines[driver_id as usize].write("resfet-cmd-handler", value)?;
-
-    Ok(())
+    driver_lines[driver_id as usize]
+        .write("resfet-cmd-handler", value)
+        .map_err(std::convert::Into::into)
 }
 
 /// Perform a sequence of actions, such as for emergency stopping or for
