@@ -106,7 +106,6 @@ impl Command {
         }
 
         let result = serde_json::from_slice(&buffer);
-        println!("{result:?}");
         let cmd = result
             .map_err(|_| ParseError::Malformed(String::from_utf8_lossy(&buffer).to_string()))?;
 
