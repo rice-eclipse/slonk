@@ -10,7 +10,7 @@ use std::{
 use gpio_cdev::Chip;
 use resfet_controller_2::{
     config::Configuration,
-    console::{LogLevel, UserLog},
+    console::UserLog,
     data::{driver_status_listen, sensor_listen},
     execution::handle_command,
     hardware::{
@@ -34,22 +34,25 @@ use resfet_controller_2::{
 /// If the directory does not exist, it will be created.
 fn main() -> Result<(), ControllerError> {
     println!("=== RESFET 2 by Rice Eclipse ===");
-    println!("Parsing configuration file...");
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Use arguments to get configuration file
     let json_path = args.get(0).ok_or(ControllerError::Args)?;
+    let logs_path = args.get(1).ok_or(ControllerError::Args)?;
 
+    create_dir_all(logs_path)?;
+    let user_log = UserLog::new(File::create(PathBuf::from_iter([
+        logs_path,
+        "console.txt",
+    ]))?);
+    let user_log_ref = &user_log;
+
+    user_log.debug("Parsing configuration file...")?;
     let config_file = File::open(json_path)?;
     let config = Configuration::parse(&mut BufReader::new(config_file))?;
     let config_ref = &config;
-    println!("Successfully parsed configuration file.");
-    println!("Creating log files...");
+    user_log.debug("Successfully parsed configuration file")?;
 
-    let logs_path = args.get(1).ok_or(ControllerError::Args)?;
-
-    // create path to log files directory
-    create_dir_all(logs_path)?;
-    println!("Created directory {logs_path}");
+    user_log.debug("Creating configuration files")?;
 
     let mut sensor_log_files: Vec<Vec<File>> = Vec::new();
     for sensor_group in &config.sensor_groups {
@@ -57,14 +60,18 @@ fn main() -> Result<(), ControllerError> {
         let sensor_group_path = PathBuf::from_iter([logs_path, &sensor_group.label]);
         // create subfolder for this sensor group
         create_dir_all(&sensor_group_path)?;
-        println!("Created directory {:?}", sensor_group_path.as_os_str());
+        user_log.info(&format!(
+            "Created directory {:}",
+            sensor_group_path.display()
+        ))?;
 
         for sensor in &sensor_group.sensors {
             // create file for this specific sensor
             let mut sensor_file_path = sensor_group_path.clone();
             sensor_file_path.push(&format!("{}.csv", sensor.label));
             group_files.push(File::create(&sensor_file_path)?);
-            println!("Created log file {:?}", sensor_file_path.as_os_str());
+
+            user_log.info(&format!("Created log file {:}", sensor_file_path.display()))?;
         }
 
         sensor_log_files.push(group_files);
@@ -77,14 +84,8 @@ fn main() -> Result<(), ControllerError> {
     let mut drivers_file = File::create(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
     let drivers_file_ref = &mut drivers_file;
 
-    let user_log = UserLog::new(File::create(PathBuf::from_iter([
-        logs_path,
-        "console.txt",
-    ]))?);
-    let user_log_ref = &user_log;
-
-    println!("Successfully created log files");
-    println!("Now spawning sensor listener threads...");
+    user_log.debug("Successfully created log files")?;
+    user_log.debug("Now spawning sensor listener threads...")?;
 
     let state = StateGuard::new(ControllerState::Standby);
     let state_ref = &state;
@@ -142,15 +143,15 @@ fn main() -> Result<(), ControllerError> {
             )
         });
 
-        println!("Successfully spawned sensor listener threads.");
-        println!("Opening network...");
+        user_log.debug("Successfully spawned sensor listener threads.")?;
+        user_log.debug("Opening network...")?;
 
         // TODO: maybe configure this IP number?
         let address = "127.0.0.1:1234";
         let listener = TcpListener::bind(address)?;
 
-        println!("Successfully opened TCP listener on address {address}");
-        println!("Handling clients...");
+        user_log.info(&format!("Opened TCP listener on address {address}"))?;
+        user_log.debug("Handling clients...")?;
 
         for mut from_dash in listener.incoming().flatten() {
             to_dash
@@ -189,10 +190,9 @@ fn handle_client(
         let Ok(cmd) = cmd_deser_result else {
             #[allow(unused_must_use)] {
                 // don't kill the process even if we get something bad
-                user_log.write(
-                    LogLevel::Critical, 
-                    &format!("encountered error while parsing message. future messages will likely not be parsed correctly: {cmd_deser_result:?}")
-                );
+                user_log.critical(&format!(
+                    "encountered error while parsing message. future messages will likely not be parsed correctly: {cmd_deser_result:?}"
+                ));
             }
             continue;
         };

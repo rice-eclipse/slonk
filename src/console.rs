@@ -26,7 +26,6 @@ pub enum LogLevel {
     /// The highest log level.
     /// Used for notifying the user of absolutely critical information which is
     /// fatal to the system.
-    /// Critical messages will be written to stderr.
     Critical = 3,
 }
 
@@ -47,12 +46,34 @@ impl Display for LogLevel {
 
 impl<W: Write> UserLog<W> {
     /// Construct a new `UserLog`.
-    ///
-    ///
     pub fn new(buf: W) -> UserLog<W> {
         UserLog {
             log_buffer: Mutex::new(buf),
         }
+    }
+
+    #[allow(clippy::missing_errors_doc)]
+    /// Alias for `UserLog::write(LogLevel::Debug, string)`.
+    pub fn debug(&self, string: &str) -> std::io::Result<()> {
+        self.write(LogLevel::Debug, string)
+    }
+
+    #[allow(clippy::missing_errors_doc)]
+    /// Alias for `UserLog::write(LogLevel::Info, string)`.
+    pub fn info(&self, string: &str) -> std::io::Result<()> {
+        self.write(LogLevel::Info, string)
+    }
+
+    #[allow(clippy::missing_errors_doc)]
+    /// Alias for `UserLog::write(LogLevel::Warn, string)`.
+    pub fn warn(&self, string: &str) -> std::io::Result<()> {
+        self.write(LogLevel::Warn, string)
+    }
+
+    #[allow(clippy::missing_errors_doc)]
+    /// Alias for `UserLog::write(LogLevel::Critical, string)`.
+    pub fn critical(&self, string: &str) -> std::io::Result<()> {
+        self.write(LogLevel::Critical, string)
     }
 
     /// Log some information.
@@ -61,8 +82,6 @@ impl<W: Write> UserLog<W> {
     ///
     /// * `level`: The level of the log.
     ///     Higher-level logs are more critical.
-    ///     If the level `LogLevel::CRITICAL` is passed, this log will be
-    ///     written to stderr.
     /// * `string`: The information to log.
     ///     I recommend using `format!()` to construct this string.
     ///
@@ -80,11 +99,7 @@ impl<W: Write> UserLog<W> {
             .unwrap()
             .as_nanos();
 
-        if level == LogLevel::Critical {
-            eprintln!("[{log_time_nanos}] [{level}] {string}");
-        } else {
-            println!("[{log_time_nanos}] [{level}] {string}");
-        }
+        println!("[{log_time_nanos}] [{level}] {string}");
         writeln!(
             // we trust writing to the log buffer will not cause a panic.
             self.log_buffer.lock().unwrap(),
