@@ -2,8 +2,6 @@
 
 use std::{thread::sleep, time::Duration};
 
-use gpio_cdev::{Chip, Line};
-
 use super::GpioPin;
 
 /// An SPI bus.
@@ -43,15 +41,8 @@ impl<'a, P: GpioPin> Device<'a, P> {
     ///
     /// This function may return an error if we are unable to acquire the line
     /// from the OS.
-    pub fn new(
-        bus: &'a Bus<Line>,
-        chip: &mut Chip,
-        pin: u8,
-    ) -> Result<Device<'a, Line>, gpio_cdev::Error> {
-        Ok(Device {
-            bus,
-            pin_cs: chip.get_line(u32::from(pin))?,
-        })
+    pub fn new(bus: &'a Bus<P>, pin_cs: P) -> Device<'a, P> {
+        Device { bus, pin_cs }
     }
 
     #[must_use]
@@ -123,5 +114,33 @@ impl<'a, P: GpioPin> Device<'a, P> {
         self.pin_cs.write(consumer, true)?;
 
         Ok(())
+    }
+}
+
+mod tests {
+    use crate::hardware::ListenerPin;
+
+    use super::*;
+
+    #[test]
+    fn transfer_byte_zeros() {
+        let bus = Bus {
+            period: Duration::from_micros(1),
+            pin_mosi: ListenerPin::new(false),
+            pin_miso: ListenerPin::new(true),
+            pin_clk: ListenerPin::new(false),
+        };
+        let dev = Device::new(&bus, ListenerPin::new(true));
+        let mut incoming = [0; 1];
+
+        dev.transfer("test", &[0xAC], &mut incoming).unwrap();
+
+        assert_eq!(incoming, [0xFF]);
+        let hist_guard = bus.pin_mosi.history();
+        let readout: &[bool] = hist_guard.as_ref();
+        assert_eq!(
+            readout,
+            &[false, true, false, true, false, true, true, false, false]
+        );
     }
 }
