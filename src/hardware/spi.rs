@@ -2,12 +2,14 @@
 
 use std::{thread::sleep, time::Duration};
 
-use gpio_cdev::{Chip, Line, LineRequestFlags};
+use gpio_cdev::{Chip, Line};
+
+use super::GpioPin;
 
 /// An SPI bus.
 /// This structure contains enough information to talk on SPI, but contains no
 /// device data.
-pub struct Bus {
+pub struct Bus<P: GpioPin> {
     /// The clock period.
     /// The clock period is the time between two rising edges on the clock.
     /// Therefore the length of a pulse (the time between a rising and falling
@@ -15,33 +17,37 @@ pub struct Bus {
     pub period: Duration,
     /// The clock pin.
     /// This pin will be actuated on a regular timescale
-    pub pin_clk: Line,
+    pub pin_clk: P,
     /// The Master Output - Slave Input pin.
     /// This pin is used to send messages to slave devices.
-    pub pin_mosi: Line,
+    pub pin_mosi: P,
     /// The Master Input - Slave Output pin.
     /// This pin is used to receive messages from slave devices.
-    pub pin_miso: Line,
+    pub pin_miso: P,
 }
 
 /// An SPI device.
 /// This structure is actually a wrapper for a single chip-selection pin for SPI
 /// communication.
-pub struct Device<'a> {
+pub struct Device<'a, P: GpioPin> {
     /// A reference to the bus that this device lives "inside" of.
-    bus: &'a Bus,
+    bus: &'a Bus<P>,
     /// The chip selection pin.
-    pin_cs: Line,
+    pin_cs: P,
 }
 
-impl<'a> Device<'a> {
+impl<'a, P: GpioPin> Device<'a, P> {
     /// Construct a new device, registering its line with the OS.
     ///
     /// # Errors
     ///
     /// This function may return an error if we are unable to acquire the line
     /// from the OS.
-    pub fn new(bus: &'a Bus, chip: &mut Chip, pin: u8) -> Result<Device<'a>, gpio_cdev::Error> {
+    pub fn new(
+        bus: &'a Bus<Line>,
+        chip: &mut Chip,
+        pin: u8,
+    ) -> Result<Device<'a, Line>, gpio_cdev::Error> {
         Ok(Device {
             bus,
             pin_cs: chip.get_line(u32::from(pin))?,
@@ -88,54 +94,33 @@ impl<'a> Device<'a> {
     ) -> Result<(), gpio_cdev::Error> {
         assert_eq!(outgoing.len(), incoming.len());
 
-        // collect handles for all pins
-
-        // Chip select is output and defaults to high
-        let handle_cs = self.pin_cs.request(LineRequestFlags::OUTPUT, 1, consumer)?;
-
-        // Clock is output and defaults to low
-        let handle_clk = self
-            .bus
-            .pin_clk
-            .request(LineRequestFlags::OUTPUT, 0, consumer)?;
-
-        // MOSI is output and defaults to low
-        let handle_mosi = self
-            .bus
-            .pin_mosi
-            .request(LineRequestFlags::OUTPUT, 0, consumer)?;
-
-        // MISO is input and defaults to low
-        let handle_miso = self
-            .bus
-            .pin_miso
-            .request(LineRequestFlags::INPUT, 0, consumer)?;
-
         // pull chip select down to begin talking
-        handle_cs.set_value(0)?;
+        self.pin_cs.write(consumer, false)?;
 
         for (byte_out, byte_in) in outgoing.iter().zip(incoming.iter_mut()) {
             // Iterate in reverse because we are performing a big endian
             // transfer
             for bit_idx in (0..8).rev() {
-                handle_mosi.set_value((1 << bit_idx & byte_out) >> bit_idx)?;
+                self.bus
+                    .pin_mosi
+                    .write(consumer, (1 << bit_idx & byte_out) != 0)?;
                 // perform half a clock wait
                 sleep(self.bus.period / 2);
                 // rising edge on the clock corresponds to read from device
-                handle_clk.set_value(1)?;
+                self.bus.pin_clk.write(consumer, true)?;
                 // read the incoming bit
-                let bit_in = handle_miso.get_value()?;
+                let bit_in = u8::from(self.bus.pin_miso.read(consumer)?);
                 *byte_in |= bit_in << bit_idx;
 
                 // perform half a clock wait
                 sleep(self.bus.period / 2);
                 // falling edge on the clock corresponds to write to device
-                handle_clk.set_value(0)?;
+                self.bus.pin_clk.write(consumer, false)?;
             }
         }
 
         // bring chip select back up to let it know that we're done talking
-        handle_cs.set_value(1)?;
+        self.pin_cs.write(consumer, true)?;
 
         Ok(())
     }

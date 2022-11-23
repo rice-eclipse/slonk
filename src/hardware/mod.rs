@@ -65,9 +65,9 @@ pub trait Adc {
 /// It is the primary ADC used in Rice Eclipse's engine controllers.
 /// For more information, refer to the
 /// [datasheet](https://pdf1.alldatasheet.com/datasheet-pdf/view/74937/MICROCHIP/MCP3208.html).
-pub struct Mcp3208<'a> {
+pub struct Mcp3208<'a, P: GpioPin> {
     /// The SPI device associated with this ADC.
-    device: spi::Device<'a>,
+    device: spi::Device<'a, P>,
 }
 
 /// A structure for testing GPIO writes.
@@ -77,7 +77,7 @@ pub struct Mcp3208<'a> {
 /// pin.
 pub struct ListenerPin(Mutex<Vec<bool>>);
 
-impl<'a> Mcp3208<'a> {
+impl<'a, P: GpioPin> Mcp3208<'a, P> {
     /// The minimum frequency at which the SPI clock can operate for the MCP3208
     /// to work correctly.
     pub const SPI_MIN_FREQUENCY: u64 = 10_000;
@@ -93,9 +93,10 @@ impl<'a> Mcp3208<'a> {
     /// This function will panic if the clock period of `device` is less than
     /// or equal to 1.2ms, which is the minimum operating period of an MCP3208
     /// ADC.
-    pub fn new(device: spi::Device<'a>) -> Mcp3208<'a> {
+    pub fn new(device: spi::Device<'a, P>) -> Mcp3208<'a, P> {
         assert!(
-            device.clock_period() > Duration::from_micros(1_000_000 / Mcp3208::SPI_MIN_FREQUENCY)
+            device.clock_period()
+                > Duration::from_micros(1_000_000 / Mcp3208::<P>::SPI_MIN_FREQUENCY)
         );
         Mcp3208 { device }
     }
@@ -119,7 +120,7 @@ impl ListenerPin {
     }
 }
 
-impl Adc for Mcp3208<'_> {
+impl<P: GpioPin> Adc for Mcp3208<'_, P> {
     /// Perform an ADC read on channel `channel`. Returns the raw 12-bit ADC
     /// reading of the channel on the device.
     ///
