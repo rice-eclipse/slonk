@@ -117,6 +117,7 @@ impl<'a, P: GpioPin> Device<'a, P> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::hardware::ListenerPin;
 

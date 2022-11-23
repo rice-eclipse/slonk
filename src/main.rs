@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use gpio_cdev::{Chip, Line};
+use gpio_cdev::Chip;
 use slonk::{
     config::Configuration,
     console::UserLog,
@@ -107,11 +107,10 @@ fn main() -> Result<(), ControllerError> {
 
     let mut adcs = Vec::new();
     for &cs_pin in &config.adc_cs {
-        adcs.push(Mcp3208::new(Device::<Line>::new(
+        adcs.push(Mcp3208::new(Device::new(
             &bus,
-            &mut gpio_chip,
-            cs_pin,
-        )?));
+            gpio_chip.get_line(u32::from(cs_pin)).unwrap(),
+        )));
     }
     let adcs_ref = &adcs;
 
