@@ -6,8 +6,8 @@ implementation-dependent approach.
 
 ## Terms
 
-- _Dashboard_: the device running `slonkboard`. Acts as a client to the
-  controller.
+- _Dashboard_: the device running `slonkboard`.
+  Acts as a client to the controller.
 
 - _Controller_: the device running the replacement for `slonk`.
 
@@ -34,12 +34,13 @@ The overarching structure of the messages will be the same across both
 directions, and at the top level should be a mapping containing keys with
 timestamps, message types, and potentially other debug information.
 
-Configuration files will also be formatted with JSON. To avoid having users use
-mismatched configurations, the configuration will be specified exclusively on
-the controller.
+Configuration files will also be formatted with JSON.
+To avoid having users use mismatched configurations, the configuration will be
+specified exclusively on the controller.
 During the intialization of a connection, the entire configuration file will be
-given to the dashboard as a message. This configuration file would contain
-hardware indices for ADCs, calibration values, burn durations, and similar.
+given to the dashboard as a message.
+This configuration file would contain hardware indices for ADCs, calibration
+values, burn durations, and similar.
 
 ## Example timeline
 
@@ -78,7 +79,8 @@ The fields of the main configuration object are as follows:
   When a log buffer is full, its data will be flushed into a log file.
 
 - `sensor_groups` - array: A list describing each set of sensors and the threads
-  that manage them. It will also include calibration information.
+  that manage them.
+  It also includes calibration information.
 
 - `pre_ignite_time` - number. The duration of the pre-ignition period in
   milliseconds.
@@ -189,8 +191,8 @@ that can be performed during ignition.
 ### Sample configuration
 
 I wouldn't recommend using this configuration - the numbers are made up and
-possibly could cause serious issues. However, it makes the syntax and structure
-of a configuration apparent.
+possibly could cause serious issues.
+However, it makes the syntax and structure of a configuration apparent.
 
 ```json
 {
