@@ -1,7 +1,7 @@
 # `slonk` Rewrite API Proposal
 
 Since we're rewriting the engine controller, we might as well rewrite the API.
-This proposal outlines a new API for `slonk`, moving away from RESFET's opaque, 
+This proposal outlines a new API for `slonk`, moving away from RESFET's opaque,
 implementation-dependent approach.
 
 ## Terms
@@ -444,19 +444,5 @@ It describes the current values of all the drivers.
 {
   "type": "DriverValue",
   "values": [false, true, false]
-}
-```
-
-#### Display
-
-A `Display` message will be sent whenever the controller wishes to display a
-message to the user on the dashboard.
-
-- `message` - string: The message which will be displayed to the user.
-
-```json
-{
-  "type": "Display",
-  "message": "The weather today is expected to be mostly sunny, with a high of 73 degrees Fahrenheit."
 }
 ```

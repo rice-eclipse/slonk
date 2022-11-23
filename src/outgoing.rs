@@ -36,11 +36,6 @@ pub enum Message<'a> {
         /// original configuration object.
         values: &'a [bool],
     },
-    /// A display message, which will write out a string to the dashboard.
-    Display {
-        /// The message to display to the user.
-        message: &'a str,
-    },
 }
 
 #[derive(Serialize)]
@@ -191,20 +186,6 @@ mod tests {
             }"#,
             &Message::DriverValue {
                 values: &[false, true, false],
-            },
-        );
-    }
-
-    #[test]
-    /// Test that a display message is serialized correctly.
-    fn serialize_display() {
-        serialize_helper(
-            r#"{
-                "type": "Display",
-                "message": "The weather today is expected to be mostly sunny, with a high of 73 degrees Fahrenheit."
-            }"#,
-            &Message::Display {
-                message: "The weather today is expected to be mostly sunny, with a high of 73 degrees Fahrenheit."
             },
         );
     }
