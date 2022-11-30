@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use gpio_cdev::Chip;
+use gpio_cdev::{Chip, LineRequestFlags};
 use slonk::{
     config::Configuration,
     console::UserLog,
@@ -100,16 +100,30 @@ fn main() -> Result<(), ControllerError> {
     let mut gpio_chip = Chip::new("/dev/gpiochip0")?;
     let bus = Mutex::new(Bus {
         period: Duration::from_secs(1) / config.spi_frequency_clk,
-        pin_clk: gpio_chip.get_line(config.spi_clk as u32)?,
-        pin_mosi: gpio_chip.get_line(config.spi_mosi as u32)?,
-        pin_miso: gpio_chip.get_line(config.spi_miso as u32)?,
+        pin_clk: gpio_chip.get_line(config.spi_clk as u32)?.request(
+            LineRequestFlags::OUTPUT,
+            0,
+            "slonk",
+        )?,
+        pin_mosi: gpio_chip.get_line(config.spi_mosi as u32)?.request(
+            LineRequestFlags::OUTPUT,
+            0,
+            "slonk",
+        )?,
+        pin_miso: gpio_chip.get_line(config.spi_miso as u32)?.request(
+            LineRequestFlags::INPUT,
+            0,
+            "slonk",
+        )?,
     });
 
     let mut adcs = Vec::new();
     for &cs_pin in &config.adc_cs {
         adcs.push(Mutex::new(Mcp3208::new(Device::new(
             &bus,
-            gpio_chip.get_line(u32::from(cs_pin)).unwrap(),
+            gpio_chip
+                .get_line(u32::from(cs_pin))?
+                .request(LineRequestFlags::OUTPUT, 1, "slonk")?,
         ))));
     }
     let adcs_ref = &adcs;
@@ -118,7 +132,13 @@ fn main() -> Result<(), ControllerError> {
         config
             .drivers
             .iter()
-            .map(|driver| gpio_chip.get_line(u32::from(driver.pin)).unwrap())
+            .map(|driver| {
+                gpio_chip
+                    .get_line(u32::from(driver.pin))
+                    .unwrap()
+                    .request(LineRequestFlags::all(), 0, "slonk")
+                    .unwrap()
+            })
             .collect(),
     );
     let driver_lines_ref = &driver_lines;

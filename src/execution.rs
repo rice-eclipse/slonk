@@ -171,7 +171,7 @@ fn actuate_driver(
     value: bool,
 ) -> Result<(), ControllerError> {
     driver_lines[driver_id as usize]
-        .write("slonk-cmd-handler", value)
+        .write(value)
         .map_err(std::convert::Into::into)
 }
 
@@ -188,7 +188,7 @@ fn perform_actions(
     for action in actions {
         match action {
             Action::Actuate { driver_id, value } => {
-                driver_lines[*driver_id as usize].write("slonk-action-seq", *value)?;
+                driver_lines[*driver_id as usize].write(*value)?;
             }
             Action::Sleep { duration } => sleep(*duration),
         };

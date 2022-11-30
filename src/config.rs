@@ -2,10 +2,9 @@
 
 use std::{io::Read, time::Duration};
 
-use gpio_cdev::Line;
 use serde::{Deserialize, Serialize};
 
-use crate::hardware::Mcp3208;
+use crate::hardware::{ListenerPin, Mcp3208};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 /// A configuration for the entire engine controller.
@@ -159,7 +158,7 @@ impl Configuration {
 
         // now validate it
 
-        if u64::from(config.spi_frequency_clk) < Mcp3208::<Line>::SPI_MIN_FREQUENCY {
+        if u64::from(config.spi_frequency_clk) < Mcp3208::<ListenerPin>::SPI_MIN_FREQUENCY {
             return Err(Error::ClockTooSlow);
         }
 

@@ -7,7 +7,7 @@ pub mod spi;
 
 use std::time::Duration;
 
-use gpio_cdev::{Line, LineRequestFlags};
+use gpio_cdev::LineHandle;
 
 use crate::ControllerError;
 
@@ -21,7 +21,7 @@ pub trait GpioPin {
     /// # Errors
     ///
     /// This can return an error if the read failed.
-    fn read(&mut self, consumer: &str) -> Result<bool, gpio_cdev::Error>;
+    fn read(&mut self) -> Result<bool, gpio_cdev::Error>;
 
     /// Perform a GPIO write on this pin, setting the pin's logic level to
     /// `value`.
@@ -31,7 +31,7 @@ pub trait GpioPin {
     /// # Errors
     ///
     /// This can return an error if the read failed.
-    fn write(&mut self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error>;
+    fn write(&mut self, value: bool) -> Result<(), gpio_cdev::Error>;
 }
 
 /// A generic trait for an ADC (Analog-to-Digital Converter).
@@ -43,8 +43,6 @@ pub trait Adc {
     ///
     /// # Inputs
     ///
-    /// * `consumer`: A string describing the thread, process, or caller which
-    ///     is using this device.
     /// * `channel`: The channel (in the case of a multi-channel ADC) to be read
     ///     from.
     ///
@@ -52,7 +50,7 @@ pub trait Adc {
     ///
     /// This function can return any error as described in the definition of
     /// `ControllerError`.
-    fn read(&mut self, consumer: &str, channel: u8) -> Result<u16, ControllerError>;
+    fn read(&mut self, channel: u8) -> Result<u16, ControllerError>;
 }
 
 /// A structure for interfacing with the MCP3208 ADC.
@@ -128,7 +126,7 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
     ///
     /// This function will return an error if something goes wrong with GPIO.
     /// For more information, check the documentation in `gpio_cdev`.
-    fn read(&mut self, consumer: &str, channel: u8) -> Result<u16, ControllerError> {
+    fn read(&mut self, channel: u8) -> Result<u16, ControllerError> {
         assert!((0..8).contains(&channel));
 
         // We send two "high" bits, and then the channel ID to tell the ADC to
@@ -141,7 +139,7 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
         assert_eq!(outgoing.len(), incoming.len());
 
         // perform an SPI transfer
-        self.device.transfer(consumer, &outgoing, &mut incoming)?;
+        self.device.transfer(&outgoing, &mut incoming)?;
 
         // the back two bytes of `incoming` now have our data in big endian
         // representation.
@@ -150,28 +148,25 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
 }
 
 impl GpioPin for ListenerPin {
-    fn read(&mut self, _consumer: &str) -> Result<bool, gpio_cdev::Error> {
+    fn read(&mut self) -> Result<bool, gpio_cdev::Error> {
         Ok(*self.0.last().unwrap())
     }
 
-    fn write(&mut self, _consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
+    fn write(&mut self, value: bool) -> Result<(), gpio_cdev::Error> {
         self.0.push(value);
 
         Ok(())
     }
 }
 
-impl GpioPin for Line {
-    fn read(&mut self, consumer: &str) -> Result<bool, gpio_cdev::Error> {
-        Ok(1 == self
-            .request(LineRequestFlags::INPUT, 0, consumer)?
-            .get_value()?)
+impl GpioPin for LineHandle {
+    fn read(&mut self) -> Result<bool, gpio_cdev::Error> {
+        Ok(1 == self.get_value()?)
     }
 
-    fn write(&mut self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
+    fn write(&mut self, value: bool) -> Result<(), gpio_cdev::Error> {
         let int_value = u8::from(value);
-        self.request(LineRequestFlags::OUTPUT, int_value, consumer)?
-            .set_value(int_value)?;
+        self.set_value(int_value)?;
 
         Ok(())
     }

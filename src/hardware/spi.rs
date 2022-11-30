@@ -64,11 +64,6 @@ impl<'a, P: GpioPin> Device<'a, P> {
     ///
     /// # Inputs
     ///
-    /// * `consumer`: A string describing the consuming process.
-    ///     Under most circumstances, it should be a human readable name for the
-    ///     thread responsible for this IO.
-    ///     If `consumer` is more than 31 characters long, it will be truncated.
-    ///
     /// * `outgoing`: The buffer of bytes which will be sent out to the device.
     ///
     /// * `incoming`: The buffer that will be populated with bytes from the
@@ -85,7 +80,6 @@ impl<'a, P: GpioPin> Device<'a, P> {
     /// interface with the GPIO pins.
     pub fn transfer(
         &mut self,
-        consumer: &str,
         outgoing: &[u8],
         incoming: &mut [u8],
     ) -> Result<(), ControllerError> {
@@ -94,32 +88,30 @@ impl<'a, P: GpioPin> Device<'a, P> {
         let half_period = bus_handle.period / 2;
 
         // pull chip select down to begin talking
-        self.pin_cs.write(consumer, false)?;
+        self.pin_cs.write(false)?;
 
         for (byte_out, byte_in) in outgoing.iter().zip(incoming.iter_mut()) {
             // Iterate in reverse because we are performing a big endian
             // transfer
             for bit_idx in (0..8).rev() {
-                bus_handle
-                    .pin_mosi
-                    .write(consumer, (1 << bit_idx & byte_out) != 0)?;
+                bus_handle.pin_mosi.write((1 << bit_idx & byte_out) != 0)?;
                 // perform half a clock wait
                 sleep(half_period);
                 // rising edge on the clock corresponds to read from device
-                bus_handle.pin_clk.write(consumer, true)?;
+                bus_handle.pin_clk.write(true)?;
                 // read the incoming bit
-                let bit_in = u8::from(bus_handle.pin_miso.read(consumer)?);
+                let bit_in = u8::from(bus_handle.pin_miso.read()?);
                 *byte_in |= bit_in << bit_idx;
 
                 // perform half a clock wait
                 sleep(half_period);
                 // falling edge on the clock corresponds to write to device
-                bus_handle.pin_clk.write(consumer, false)?;
+                bus_handle.pin_clk.write(false)?;
             }
         }
 
         // bring chip select back up to let it know that we're done talking
-        self.pin_cs.write(consumer, true)?;
+        self.pin_cs.write(true)?;
 
         Ok(())
     }
@@ -142,7 +134,7 @@ mod tests {
         let mut dev = Device::new(&bus, ListenerPin::new(true));
         let mut incoming = [0; 1];
 
-        dev.transfer("test", &[0xAC], &mut incoming).unwrap();
+        dev.transfer(&[0xAC], &mut incoming).unwrap();
 
         assert_eq!(incoming, [0xFF]);
         let bus_handle = bus.lock().unwrap();

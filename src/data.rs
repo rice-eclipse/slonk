@@ -108,8 +108,6 @@ pub fn sensor_listen<'a>(
     let ignition_period = Duration::from_secs(1) / group.frequency_ignition;
     let transmission_period = Duration::from_secs(1) / group.frequency_transmission;
 
-    let consumer_name = format!("sensor_listener_{}", group_id);
-
     while state.status()? != ControllerState::Quit {
         // read from each device
         for (idx, sensor) in group.sensors.iter().enumerate() {
@@ -119,7 +117,7 @@ pub fn sensor_listen<'a>(
                 }
                 continue;
             };
-            let adc_read_result = adc_guard.read(&consumer_name, sensor.channel);
+            let adc_read_result = adc_guard.read(sensor.channel);
             let Ok(reading) = adc_read_result else {
                 #[allow(unused_must_use)] {
                     user_log.critical(&format!("unable to read {} due to error: {adc_read_result:?}", sensor.label));
@@ -273,7 +271,7 @@ pub fn driver_status_listen(
         for (driver_idx, (driver_line, state_ref)) in
             drivers_guard.iter_mut().zip(&mut driver_states).enumerate()
         {
-            match driver_line.read("slonk-driver-status") {
+            match driver_line.read() {
                 Ok(read_value) => *state_ref = read_value,
                 #[allow(unused_must_use)]
                 Err(e) => {
@@ -394,7 +392,7 @@ mod tests {
     struct ReturnsNumber(u16);
 
     impl Adc for ReturnsNumber {
-        fn read(&mut self, _: &str, _: u8) -> Result<u16, crate::ControllerError> {
+        fn read(&mut self, _: u8) -> Result<u16, crate::ControllerError> {
             Ok(self.0)
         }
     }
