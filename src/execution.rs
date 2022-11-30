@@ -42,7 +42,7 @@ pub fn handle_command(
     log_file: &mut impl Write,
     user_log: &UserLog<impl Write>,
     configuration: &Configuration,
-    driver_lines: &[impl GpioPin],
+    driver_lines: &Mutex<Vec<impl GpioPin>>,
     state: &StateGuard,
     dashboard_stream: &Mutex<DashChannel<impl Write, impl Write>>,
 ) -> Result<(), ControllerError> {
@@ -68,9 +68,13 @@ pub fn handle_command(
                 .send(&Message::Ready)
                 .map_err(|_| ControllerError::Io)?;
         }
-        Command::Actuate { driver_id, value } => actuate_driver(driver_lines, *driver_id, *value)?,
-        Command::Ignition => ignition(configuration, driver_lines, state)?,
-        Command::EmergencyStop => emergency_stop(configuration, driver_lines, state)?,
+        Command::Actuate { driver_id, value } => {
+            actuate_driver(driver_lines.lock()?.as_mut(), *driver_id, *value)?;
+        }
+        Command::Ignition => ignition(configuration, driver_lines.lock()?.as_mut(), state)?,
+        Command::EmergencyStop => {
+            emergency_stop(configuration, driver_lines.lock()?.as_mut(), state)?;
+        }
     };
 
     let time = SystemTime::now()
@@ -98,7 +102,7 @@ pub fn handle_command(
 /// * We failed to gain control over GPIO.
 pub fn emergency_stop(
     configuration: &Configuration,
-    driver_lines: &[impl GpioPin],
+    driver_lines: &mut [impl GpioPin],
     state: &StateGuard,
 ) -> Result<(), ControllerError> {
     // transition to EStop, and if it's already in EStopping, don't interfere
@@ -124,7 +128,7 @@ pub fn emergency_stop(
 /// * We failed to gain control over GPIO.
 fn ignition(
     configuration: &Configuration,
-    driver_lines: &[impl GpioPin],
+    driver_lines: &mut [impl GpioPin],
     state: &StateGuard,
 ) -> Result<(), ControllerError> {
     state.move_to(ControllerState::PreIgnite)?;
@@ -162,7 +166,7 @@ fn ignition(
 ///
 /// This function may return an error if we are unable to gain control over the GPIO pin associated with the driver.
 fn actuate_driver(
-    driver_lines: &[impl GpioPin],
+    driver_lines: &mut [impl GpioPin],
     driver_id: u8,
     value: bool,
 ) -> Result<(), ControllerError> {
@@ -178,7 +182,7 @@ fn actuate_driver(
 ///
 /// TODO
 fn perform_actions(
-    driver_lines: &[impl GpioPin],
+    driver_lines: &mut [impl GpioPin],
     actions: &[Action],
 ) -> Result<(), ControllerError> {
     for action in actions {
@@ -231,13 +235,13 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
 
-        let driver_lines: [ListenerPin; 0] = [];
+        let mut driver_lines: [ListenerPin; 0] = [];
 
         let state = StateGuard::new(ControllerState::Standby);
         let state_ref = &state;
 
         scope(|s| {
-            s.spawn(move || ignition(&config, &driver_lines, state_ref).unwrap());
+            s.spawn(move || ignition(&config, &mut driver_lines, state_ref).unwrap());
 
             sleep(Duration::from_millis(250));
             assert_eq!(state.status().unwrap(), ControllerState::PreIgnite);
@@ -285,10 +289,10 @@ mod tests {
 
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
-        let driver_lines = [ListenerPin::new(false)];
+        let mut driver_lines = [ListenerPin::new(false)];
         let state = StateGuard::new(ControllerState::Standby);
 
-        ignition(&config, &driver_lines, &state).unwrap();
+        ignition(&config, &mut driver_lines, &state).unwrap();
 
         assert_eq!(driver_lines[0].history().as_slice(), [false, true, false]);
     }
@@ -324,13 +328,13 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
 
-        let driver_lines: [ListenerPin; 0] = [];
+        let mut driver_lines: [ListenerPin; 0] = [];
 
         let state = StateGuard::new(ControllerState::Standby);
         let state_ref = &state;
 
         scope(|s| {
-            s.spawn(move || emergency_stop(&config, &driver_lines, state_ref).unwrap());
+            s.spawn(move || emergency_stop(&config, &mut driver_lines, state_ref).unwrap());
 
             sleep(Duration::from_millis(250));
             assert_eq!(state.status().unwrap(), ControllerState::EStopping);
@@ -373,10 +377,10 @@ mod tests {
 
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
-        let driver_lines = [ListenerPin::new(false)];
+        let mut driver_lines = [ListenerPin::new(false)];
         let state = StateGuard::new(ControllerState::Standby);
 
-        emergency_stop(&config, &driver_lines, &state).unwrap();
+        emergency_stop(&config, &mut driver_lines, &state).unwrap();
 
         assert_eq!(driver_lines[0].history().as_slice(), [false, true, false]);
     }

@@ -5,10 +5,7 @@
 
 pub mod spi;
 
-use std::{
-    sync::{Mutex, MutexGuard},
-    time::Duration,
-};
+use std::time::Duration;
 
 use gpio_cdev::{Line, LineRequestFlags};
 
@@ -24,7 +21,7 @@ pub trait GpioPin {
     /// # Errors
     ///
     /// This can return an error if the read failed.
-    fn read(&self, consumer: &str) -> Result<bool, gpio_cdev::Error>;
+    fn read(&mut self, consumer: &str) -> Result<bool, gpio_cdev::Error>;
 
     /// Perform a GPIO write on this pin, setting the pin's logic level to
     /// `value`.
@@ -34,7 +31,7 @@ pub trait GpioPin {
     /// # Errors
     ///
     /// This can return an error if the read failed.
-    fn write(&self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error>;
+    fn write(&mut self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error>;
 }
 
 /// A generic trait for an ADC (Analog-to-Digital Converter).
@@ -55,7 +52,7 @@ pub trait Adc {
     ///
     /// This function can return any error as described in the definition of
     /// `ControllerError`.
-    fn read(&self, consumer: &str, channel: u8) -> Result<u16, ControllerError>;
+    fn read(&mut self, consumer: &str, channel: u8) -> Result<u16, ControllerError>;
 }
 
 /// A structure for interfacing with the MCP3208 ADC.
@@ -75,7 +72,7 @@ pub struct Mcp3208<'a, P: GpioPin> {
 /// A `ListenerPin` stores the history of all writes to it.
 /// When read from, a `ListenerPin` will return the last written value of the
 /// pin.
-pub struct ListenerPin(Mutex<Vec<bool>>);
+pub struct ListenerPin(Vec<bool>);
 
 impl<'a, P: GpioPin> Mcp3208<'a, P> {
     /// The minimum frequency at which the SPI clock can operate for the MCP3208
@@ -106,17 +103,13 @@ impl ListenerPin {
     #[must_use]
     /// Construct a new `ListenerPin` with only one reading in its history.
     pub fn new(last_value: bool) -> ListenerPin {
-        ListenerPin(Mutex::new(vec![last_value]))
+        ListenerPin(vec![last_value])
     }
 
+    #[must_use]
     /// Get access to the history inside this pin.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if the internal lock of this structure is
-    /// poisoned.
-    pub fn history(&self) -> MutexGuard<Vec<bool>> {
-        self.0.lock().unwrap()
+    pub fn history(&self) -> &Vec<bool> {
+        &self.0
     }
 }
 
@@ -135,7 +128,7 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
     ///
     /// This function will return an error if something goes wrong with GPIO.
     /// For more information, check the documentation in `gpio_cdev`.
-    fn read(&self, consumer: &str, channel: u8) -> Result<u16, ControllerError> {
+    fn read(&mut self, consumer: &str, channel: u8) -> Result<u16, ControllerError> {
         assert!((0..8).contains(&channel));
 
         // We send two "high" bits, and then the channel ID to tell the ADC to
@@ -157,25 +150,25 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
 }
 
 impl GpioPin for ListenerPin {
-    fn read(&self, _consumer: &str) -> Result<bool, gpio_cdev::Error> {
-        Ok(*self.0.lock().unwrap().last().unwrap())
+    fn read(&mut self, _consumer: &str) -> Result<bool, gpio_cdev::Error> {
+        Ok(*self.0.last().unwrap())
     }
 
-    fn write(&self, _consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
-        self.0.lock().unwrap().push(value);
+    fn write(&mut self, _consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
+        self.0.push(value);
 
         Ok(())
     }
 }
 
 impl GpioPin for Line {
-    fn read(&self, consumer: &str) -> Result<bool, gpio_cdev::Error> {
+    fn read(&mut self, consumer: &str) -> Result<bool, gpio_cdev::Error> {
         Ok(1 == self
             .request(LineRequestFlags::INPUT, 0, consumer)?
             .get_value()?)
     }
 
-    fn write(&self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
+    fn write(&mut self, consumer: &str, value: bool) -> Result<(), gpio_cdev::Error> {
         let int_value = u8::from(value);
         self.request(LineRequestFlags::OUTPUT, int_value, consumer)?
             .set_value(int_value)?;

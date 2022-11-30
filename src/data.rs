@@ -18,7 +18,7 @@ use crate::{
 };
 
 #[allow(dead_code)]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 /// A function which will continuously listen for new data from sensors.
 /// It will loop indefinitely.
 ///
@@ -62,10 +62,10 @@ pub fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
     group_id: u8,
     configuration: &'a Configuration,
-    driver_lines: &'a [impl GpioPin + Sync],
+    driver_lines: &'a Mutex<Vec<impl GpioPin + Send + Sync>>,
     log_files: &mut [impl Write],
     user_log: &UserLog<impl Write>,
-    adcs: &[impl Adc],
+    adcs: &[Mutex<impl Adc>],
     state: &'a StateGuard,
     dashboard_stream: &'a Mutex<DashChannel<impl Write, impl Write>>,
 ) -> Result<(), ControllerError> {
@@ -113,8 +113,13 @@ pub fn sensor_listen<'a>(
     while state.status()? != ControllerState::Quit {
         // read from each device
         for (idx, sensor) in group.sensors.iter().enumerate() {
-            let adc_read_result =
-                adcs[usize::from(sensor.adc)].read(&consumer_name, sensor.channel);
+            let Ok(mut adc_guard) = adcs[usize::from(sensor.adc)].lock() else {
+                #[allow(unused_must_use)]{
+                    user_log.critical(&format!("unable to acquire mutex on sensor ADC for {} due to poisoning", sensor.label));
+                }
+                continue;
+            };
+            let adc_read_result = adc_guard.read(&consumer_name, sensor.channel);
             let Ok(reading) = adc_read_result else {
                 #[allow(unused_must_use)] {
                     user_log.critical(&format!("unable to read {} due to error: {adc_read_result:?}", sensor.label));
@@ -145,7 +150,11 @@ pub fn sensor_listen<'a>(
                     // spin up another thread to emergency stop.
                     // this may return an error due to illegal transistion, but
                     // that is not our problem.
-                    thread_scope.spawn(|| emergency_stop(configuration, driver_lines, state));
+                    thread_scope.spawn(|| {
+                        if let Ok(mut drivers_guard) = driver_lines.lock() {
+                            emergency_stop(configuration, drivers_guard.as_mut(), state);
+                        }
+                    });
                 }
             }
         }
@@ -239,7 +248,7 @@ pub fn sensor_listen<'a>(
 /// # Panics
 pub fn driver_status_listen(
     configuration: &Configuration,
-    driver_lines: &[impl GpioPin],
+    driver_lines: &Mutex<Vec<impl GpioPin>>,
     log_file: &mut impl Write,
     user_log: &UserLog<impl Write>,
     state: &StateGuard,
@@ -247,21 +256,28 @@ pub fn driver_status_listen(
 ) -> Result<(), ControllerError> {
     // the time required to sleep
     let sleep_time = Duration::from_secs(1) / configuration.frequency_status;
-    let mut driver_states = vec![false; driver_lines.len()];
+    let mut driver_states = vec![false; driver_lines.lock()?.len()];
     while state.status()? != ControllerState::Quit {
         // read off the states of the drivers
         let read_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
+        let Ok(mut drivers_guard) = driver_lines.lock() else {
+            #[allow(unused_must_use)] {
+                user_log.critical("Unable to acquire lock over driver mutex");
+            }
+            continue;
+        };
+
         for (driver_idx, (driver_line, state_ref)) in
-            driver_lines.iter().zip(&mut driver_states).enumerate()
+            drivers_guard.iter_mut().zip(&mut driver_states).enumerate()
         {
             match driver_line.read("slonk-driver-status") {
                 Ok(read_value) => *state_ref = read_value,
                 #[allow(unused_must_use)]
                 Err(e) => {
-                    user_log.warn(&format!(
+                    user_log.critical(&format!(
                         "Unable to read state of driver {driver_idx}: {e:?}"
                     ));
                 }
@@ -370,13 +386,15 @@ mod tests {
 
     use serde_json::Value;
 
+    use crate::hardware::ListenerPin;
+
     use super::*;
 
     /// Dummy ADC structure for testing.
     struct ReturnsNumber(u16);
 
     impl Adc for ReturnsNumber {
-        fn read(&self, _: &str, _: u8) -> Result<u16, crate::ControllerError> {
+        fn read(&mut self, _: &str, _: u8) -> Result<u16, crate::ControllerError> {
             Ok(self.0)
         }
     }
@@ -426,7 +444,8 @@ mod tests {
             "spi_frequency_clk": 50000,
             "adc_cs": [0, 0]
         }"#;
-        let adcs: Vec<ReturnsNumber> = (0..2).map(ReturnsNumber).collect();
+        let adcs: Vec<Mutex<ReturnsNumber>> =
+            (0..2).map(|n| Mutex::new(ReturnsNumber(n))).collect();
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
         let state = StateGuard::new(ControllerState::Standby);
@@ -442,7 +461,7 @@ mod tests {
             .lock()
             .unwrap()
             .set_channel(&mut output_stream_buf);
-        let driver_lines: [gpio_cdev::Line; 0] = [];
+        let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here
         scope(|s| {
@@ -536,9 +555,9 @@ mod tests {
             "sensor_groups": [
                 {
                     "label": "dummy",
-                    "frequency_standby": 10,
-                    "frequency_ignition": 10,
-                    "frequency_transmission": 10,
+                    "frequency_standby": 1,
+                    "frequency_ignition": 1,
+                    "frequency_transmission": 1,
                     "sensors": [
                         {
                             "label": "dummy_sensor0",
@@ -571,7 +590,7 @@ mod tests {
             "adc_cs": [0]
         }"#;
 
-        let adcs = [ReturnsNumber(100)];
+        let adc = Mutex::new(ReturnsNumber(100));
 
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
@@ -579,7 +598,7 @@ mod tests {
         let state = StateGuard::new(ControllerState::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
         let output_stream = Mutex::new(DashChannel::<Vec<u8>, Vec<u8>>::new(Vec::new()));
-        let driver_lines: [gpio_cdev::Line; 0] = [];
+        let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here
         scope(|s| {
@@ -592,7 +611,7 @@ mod tests {
                     &driver_lines,
                     &mut logs,
                     &UserLog::new(Vec::<u8>::new()),
-                    &adcs,
+                    &[adc],
                     &state,
                     &output_stream,
                 )
@@ -605,7 +624,9 @@ mod tests {
             assert_eq!(state.status().unwrap(), ControllerState::EStopping);
 
             // continually attempt to kill the thread
-            while state.move_to(ControllerState::Quit).is_err() {}
+            while state.move_to(ControllerState::Quit).is_err() {
+                println!("failed: {:?}", state.status().unwrap());
+            }
         });
     }
 }

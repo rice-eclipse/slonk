@@ -39,7 +39,7 @@ pub enum ControllerState {
     /// data logging should still be fast here.
     PostIgnite,
     /// An emergency stop command has just been called.
-    /// This state is reachable from any other state.
+    /// This state is reachable from any other state except the `Quit` state.
     /// Data logging should be fast, since anything that is worth e-stopping
     /// over is probably very interesting.
     EStopping,
@@ -123,7 +123,7 @@ impl StateGuard {
             }
             ControllerState::Ignite => old_state == ControllerState::PreIgnite,
             ControllerState::PostIgnite => old_state == ControllerState::Ignite,
-            ControllerState::EStopping => true,
+            ControllerState::EStopping => old_state != ControllerState::Quit,
         };
 
         if !valid_transition {

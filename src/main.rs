@@ -98,26 +98,29 @@ fn main() -> Result<(), ControllerError> {
     let to_dash_ref = &to_dash;
 
     let mut gpio_chip = Chip::new("/dev/gpiochip0")?;
-    let bus = Bus {
+    let bus = Mutex::new(Bus {
         period: Duration::from_secs(1) / config.spi_frequency_clk,
         pin_clk: gpio_chip.get_line(config.spi_clk as u32)?,
         pin_mosi: gpio_chip.get_line(config.spi_mosi as u32)?,
         pin_miso: gpio_chip.get_line(config.spi_miso as u32)?,
-    };
+    });
 
     let mut adcs = Vec::new();
     for &cs_pin in &config.adc_cs {
-        adcs.push(Mcp3208::new(Device::new(
+        adcs.push(Mutex::new(Mcp3208::new(Device::new(
             &bus,
             gpio_chip.get_line(u32::from(cs_pin)).unwrap(),
-        )));
+        ))));
     }
     let adcs_ref = &adcs;
 
-    let mut driver_lines = Vec::new();
-    for driver in &config.drivers {
-        driver_lines.push(gpio_chip.get_line(u32::from(driver.pin))?);
-    }
+    let driver_lines = Mutex::new(
+        config
+            .drivers
+            .iter()
+            .map(|driver| gpio_chip.get_line(u32::from(driver.pin)).unwrap())
+            .collect(),
+    );
     let driver_lines_ref = &driver_lines;
 
     std::thread::scope(|s| {
@@ -184,7 +187,7 @@ fn handle_client(
     from_dash: &mut impl Read,
     to_dash: &Mutex<DashChannel<impl Write, impl Write>>,
     config: &Configuration,
-    driver_lines: &[impl GpioPin],
+    driver_lines: &Mutex<Vec<impl GpioPin>>,
     cmd_log_file: &mut impl Write,
     user_log: &UserLog<impl Write>,
     state_ref: &StateGuard,
