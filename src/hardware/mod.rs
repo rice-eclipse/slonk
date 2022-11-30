@@ -96,7 +96,7 @@ impl<'a, P: GpioPin> Mcp3208<'a, P> {
     pub fn new(device: spi::Device<'a, P>) -> Mcp3208<'a, P> {
         assert!(
             device.clock_period()
-                > Duration::from_micros(1_000_000 / Mcp3208::<P>::SPI_MIN_FREQUENCY)
+                < Duration::from_micros(1_000_000 / Mcp3208::<P>::SPI_MIN_FREQUENCY)
         );
         Mcp3208 { device }
     }
