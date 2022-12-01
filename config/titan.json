@@ -1,0 +1,176 @@
+{
+    "frequency_status": 10,
+    "log_buffer_size": 256,
+    "sensor_groups": [
+        {
+            "label": "TC",
+            "frequency_standby": 10,
+            "frequency_ignition": 20,
+            "frequency_transmission": 10,
+            "sensors": [
+                {
+                    "label": "TC1_OXI",
+                    "units": "°C",
+                    "calibration_intercept": 300,
+                    "calibration_slope": -0.175,
+                    "adc": 0,
+                    "channel": 0
+                },
+                {
+                    "label": "TC2_NOZZLE",
+                    "units": "°C",
+                    "calibration_intercept": -250,
+                    "calibration_slope": 0.1611,
+                    "adc": 0,
+                    "channel": 1
+                },
+                {
+                    "label": "TC3_COMB",
+                    "units": "°C",
+                    "calibration_intercept": -250,
+                    "calibration_slope": 0.1611,
+                    "adc": 0,
+                    "channel": 2
+                }
+            ]
+        },
+        {
+            "label": "PT",
+            "frequency_standby": 10,
+            "frequency_ignition": 500,
+            "frequency_transmission": 50,
+            "sensors": [
+                {
+                    "label": "PT1_COMB",
+                    "units": "psi",
+                    "calibration_intercept": -270,
+                    "calibration_slope": 0.417,
+                    "rolling_average_width": 10,
+                    "adc": 1,
+                    "channel": 0
+                },
+                {
+                    "label": "PT2_FEED",
+                    "units": "psi",
+                    "calibration_intercept": 1027,
+                    "calibration_slope": -0.286,
+                    "rolling_average_width": 10,
+                    "adc": 1,
+                    "channel": 1
+                },
+                {
+                    "label": "PT3_INJE",
+                    "units": "psi",
+                    "calibration_intercept": 1548,
+                    "calibration_slope": -0.415,
+                    "rolling_average_width": 10,
+                    "adc": 1,
+                    "channel": 2
+                },
+                {
+                    "label": "PT4_OXI",
+                    "units": "psi",
+                    "calibration_intercept": 1382,
+                    "calibration_slope": -0.372,
+                    "rolling_average_width": 10,
+                    "adc": 1,
+                    "channel": 3
+                }
+            ]
+        },
+        {
+            "label": "LC",
+            "frequency_standby": 10,
+            "frequency_ignition": 2000,
+            "frequency_transmission": 50,
+            "sensors": [
+                {
+                    "label": "LC_MAIN",
+                    "units": "lb",
+                    "calibration_intercept": 0.34,
+                    "calibration_slope": 33.2,
+                    "adc": 2,
+                    "channel": 0
+                }
+            ]
+        }
+    ],
+    "drivers": [
+        {
+            "label": "FEED",
+            "pin": 11
+        },
+        {
+            "label": "OXI_VENT",
+            "pin": 13
+        },
+        {
+            "label": "GND_VENT",
+            "pin": 15
+        },
+        {
+            "label": "UNUSED1",
+            "pin": 18
+        },
+        {
+            "label": "UNUSED2",
+            "pin": 33
+        },
+        {
+            "label": "IGN_START",
+            "pin": 32
+        }
+    ],
+    "pre_ignite_time": 1000,
+    "post_ignite_time": 5000,
+    "ignition_sequence": [
+        {
+            "type": "Actuate",
+            "driver_id": 0,
+            "value": true
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 5,
+            "value": true
+        },
+        {
+            "type": "Sleep",
+            "duration": {
+                "secs": 10,
+                "nanos": 0
+            }
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 0,
+            "value": false
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 5,
+            "value": false
+        }
+    ],
+    "estop_sequence": [
+        {
+            "type": "Actuate",
+            "driver_id": 0,
+            "value": false
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 5,
+            "value": false
+        }
+    ],
+    "spi_mosi": 10,
+    "spi_miso": 9,
+    "spi_clk": 11,
+    "spi_frequency_clk": 50000,
+    "adc_cs": [
+        26,
+        24,
+        22
+    ]
+}
