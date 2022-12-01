@@ -107,7 +107,7 @@ pub fn sensor_listen<'a>(
             let adc_read_result = adc_guard.read(sensor.channel);
             let Ok(reading) = adc_read_result else {
                 #[allow(unused_must_use)] {
-                    user_log.critical(&format!("unable to read {} due to error: {adc_read_result:?}", sensor.label));
+                    user_log.warn(&format!("unable to read {} due to error: {adc_read_result:?}", sensor.label));
                 }
                 continue;
             };
@@ -260,7 +260,7 @@ pub fn driver_status_listen(
                 Ok(read_value) => *state_ref = read_value,
                 #[allow(unused_must_use)]
                 Err(e) => {
-                    user_log.critical(&format!(
+                    user_log.warn(&format!(
                         "Unable to read state of driver {driver_idx}: {e:?}"
                     ));
                 }
