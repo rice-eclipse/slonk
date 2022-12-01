@@ -10,8 +10,8 @@ pub mod hardware;
 pub mod incoming;
 pub mod outgoing;
 
-/// A guard for controller state which can be used to notify other threads of
-/// changes to controller state.
+/// A guard for controller state which can be used to notify other threads of changes to controller
+/// state.
 pub struct StateGuard {
     /// The current state.
     state: RwLock<ControllerState>,
@@ -21,13 +21,11 @@ pub struct StateGuard {
 /// The set of all states the engine controller can be in.
 pub enum ControllerState {
     /// The engine is in standby - passively logging and awating commands.
-    /// This state can only be reached from the `PostIgnite` and `EStopping`
-    /// states.
+    /// This state can only be reached from the `PostIgnite` and `EStopping` states.
     Standby,
     /// The engine is preparing to ignite in the upcoming seconds.
     /// This state can only be reached from the `Standby` state.
-    /// During this phase, data logging threads should increase their logging
-    /// speed.
+    /// During this phase, data logging threads should increase their logging speed.
     PreIgnite,
     /// The engine is currently ignited.
     /// This state can only be reached from the `Standby` state.
@@ -35,34 +33,29 @@ pub enum ControllerState {
     Ignite,
     /// The engine is not currently ignited, but was igniting recently.
     /// This state can only be reached from the `Ignite` state.
-    /// Since interesting things might still happen in the post-ignition phase,
-    /// data logging should still be fast here.
+    /// Since interesting things might still happen in the post-ignition phase, data logging should
+    /// still be fast here.
     PostIgnite,
     /// An emergency stop command has just been called.
     /// This state is reachable from any other state except the `Quit` state.
-    /// Data logging should be fast, since anything that is worth e-stopping
-    /// over is probably very interesting.
+    /// Data logging should be fast, since anything that is worth e-stopping over is probably very
+    /// interesting.
     EStopping,
     /// The engine controller is shutting down.
     /// This state can only be reached from the `Standby` state.
-    /// During this state, each thread will "wrap up" its work and then exit as
-    /// soon as possible.
+    /// During this state, each thread will "wrap up" its work and then exit as soon as possible.
     Quit,
 }
 
 #[non_exhaustive]
 #[derive(Debug)]
-/// The full enumeration of all errors which can occur during the execution of
-/// the controller.
+/// The full enumeration of all errors which can occur during the execution of the controller.
 pub enum ControllerError {
-    /// The controller failed because a lock was poisoned, likely due to a
-    /// panicked thread.
+    /// The controller failed because a lock was poisoned, likely due to a panicked thread.
     Poison,
-    /// The library `serde_json` failed to deserialize a structure because it
-    /// was malformed.
+    /// The library `serde_json` failed to deserialize a structure because it was malformed.
     MalformedDeserialize(serde_json::Error),
-    /// There was an I/O error when writing to or reading from the network or a
-    /// file.
+    /// There was an I/O error when writing to or reading from the network or a file.
     Io,
     /// There was an error while attempting to perform some GPIO action.
     Gpio(gpio_cdev::Error),
@@ -95,8 +88,8 @@ impl StateGuard {
     ///
     /// # Errors
     ///
-    /// Will return `Err(Controller::Poison)` in the case that the internal
-    /// lock of this guard is poisoned.
+    /// Will return `Err(Controller::Poison)` in the case that the internal lock of this guard is
+    /// poisoned.
     pub fn status(&self) -> Result<ControllerState, ControllerError> {
         Ok(*self.state.read()?)
     }
@@ -105,8 +98,8 @@ impl StateGuard {
     ///
     /// # Errors
     ///
-    /// This function will return an `Err(ControllerError::Poison)` in the case
-    /// that an internal lock is poisoned.
+    /// This function will return an `Err(ControllerError::Poison)` in the case that an internal
+    /// lock is poisoned.
     /// If `new_state` is not reachable from the current state, an
     /// `Err(ControllerError::IllegalTransition)` will be returned.
     pub fn move_to(&self, new_state: ControllerState) -> Result<(), ControllerError> {
@@ -140,8 +133,7 @@ impl StateGuard {
 
 /// The set of errors that can be caused from working with a `StateGuard`.
 pub enum GuardError {
-    /// The guard's lock was poisoned. This implies a panicked thread owned a
-    /// lock.
+    /// The guard's lock was poisoned. This implies a panicked thread owned a lock.
     Poison,
     /// An illegal transition was attempted.
     IllegalTransition,

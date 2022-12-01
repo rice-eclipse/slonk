@@ -1,13 +1,12 @@
-//! Functions for handling incoming messages to the controller from the
-//! dashboard.
+//! Functions for handling incoming messages to the controller from the dashboard.
+
 use serde::Deserialize;
 use std::{fmt::Display, io::Read};
 
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type")]
-/// A parsed command received from the controller, which is now ready to be
-/// executed.
+/// A parsed command received from the controller, which is now ready to be executed.
 pub enum Command {
     /// The dashboard requested to know if the controller is ready to begin.
     Ready,
@@ -17,9 +16,8 @@ pub enum Command {
         /// The controller must verify that this string is a real driver.
         driver_id: u8,
         /// The logic level that the driver must be actuated to.
-        /// `true` corresponds to powered (i.e. connected to 12V), while `false`
-        /// corresponds to unpowered (high-Z connection or grounding; dealer's
-        /// choice).
+        /// `true` corresponds to powered (i.e. connected to 12V), while `false` corresponds to
+        /// unpowered (high-Z connection or grounding; hardware-decided).
         value: bool,
     },
     /// The dashboard requested to begin an ignition procedure immediately.
@@ -35,8 +33,8 @@ pub enum ParseError {
     /// The source channel closed unexpectedly.
     SourceClosed,
     /// The message was malformed or illegal JSON.
-    /// The value inside this variant is the sequence of bytes which contained
-    /// the malformed message.
+    /// The value inside this variant is the sequence of bytes which contained the malformed
+    /// message.
     Malformed(String),
     /// There was an I/O error in parsing the message.
     Io(std::io::ErrorKind),
@@ -44,8 +42,7 @@ pub enum ParseError {
 
 impl From<std::io::Error> for ParseError {
     /// Construct an `Io` variant of `ParseError`.
-    /// This allows convenient use of the question mark operator `?` for
-    /// bubbling up errors.
+    /// This allows convenient use of the question mark operator `?` for bubbling up errors.
     fn from(err: std::io::Error) -> Self {
         ParseError::Io(err.kind())
     }
@@ -53,13 +50,12 @@ impl From<std::io::Error> for ParseError {
 
 impl Command {
     /// Parse an incoming stream and extract the next command.
-    /// In the `Ok()` case, this will return a pair containing the command and
-    /// the instant that the command was sent.
+    /// In the `Ok()` case, this will return a pair containing the command and the instant that the
+    /// command was sent.
     ///
     /// # Errors
     ///
-    /// This function will return an `Err` in the cases described in
-    /// `ParseError`.
+    /// This function will return an `Err` in the cases described in `ParseError`.
     ///
     /// # Panics
     ///
@@ -84,8 +80,8 @@ impl Command {
                 b'}' => {
                     if !in_string {
                         if depth == 0 {
-                            // prevent underflow in the case of a message
-                            // starting with closing brace
+                            // prevent underflow in the case of a message starting with closing
+                            // brace
                             return Err(ParseError::Malformed(
                                 String::from_utf8_lossy(&buffer).to_string(),
                             ));
@@ -97,8 +93,7 @@ impl Command {
                         }
                     }
                 }
-                // if we encounter an unescaped quote, toggle whether we are in
-                // a string
+                // if we encounter an unescaped quote, toggle whether we are in a string
                 b'"' => in_string ^= !escaped,
                 _ => (),
             };
@@ -129,8 +124,7 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
-    /// Helper function to construct cursors and save some boilerplate on other
-    /// tests.
+    /// Helper function to construct cursors and save some boilerplate on other tests.
     /// Creates a cursor of `message` and uses it to call `Command::parse`.
     /// Ignores the extracted time from the parser.
     fn parse_helper(message: &str) -> Result<Command, ParseError> {

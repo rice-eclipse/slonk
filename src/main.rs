@@ -25,12 +25,11 @@ use slonk::{
 ///
 /// # Arguments
 ///
-/// The first argument to this executable (via `std::env::args`) is the path to
-/// a configuration JSON file, formatted according to the specification in
-/// `api.md`.
+/// The first argument to this executable (via `std::env::args`) is the path to a configuration JSON
+/// file, formatted according to the specification in `api.md`.
 ///
-/// The second argument to this executable is a path to a directory where log
-/// files should be created.
+/// The second argument to this executable is a path to a directory where log files should be
+/// created.
 /// If the directory does not exist, it will be created.
 fn main() -> Result<(), ControllerError> {
     println!("=== slonk by Rice Eclipse ===");
@@ -90,8 +89,8 @@ fn main() -> Result<(), ControllerError> {
     let state = StateGuard::new(ControllerState::Standby);
     let state_ref = &state;
 
-    // when a client connects, the inner value of this mutex will be `Some`
-    // containing a TCP stream to the dashboard
+    // when a client connects, the inner value of this mutex will be `Some` containing a TCP stream
+    // to the dashboard
     let to_dash = Mutex::new(DashChannel::new(File::create(PathBuf::from_iter([
         logs_path, "sent.csv",
     ]))?));
@@ -225,9 +224,7 @@ fn handle_client(
             continue;
         };
 
-        // TODO figure out if we should do something other than returning on
-        // error case here.
-        handle_command(
+        if let Err(e) = handle_command(
             &cmd,
             cmd_log_file,
             user_log,
@@ -235,6 +232,11 @@ fn handle_client(
             driver_lines,
             state_ref,
             to_dash,
-        )?;
+        ) {
+            #[allow(unused_must_use)]
+            {
+                user_log.critical(&format!("encountered error while executing commend: {e:?}"));
+            }
+        }
     }
 }

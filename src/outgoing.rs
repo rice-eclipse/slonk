@@ -20,8 +20,8 @@ pub enum Message<'a> {
     },
     /// A sensor valuation message.
     /// Each key in the map corresponds to a sensor.
-    /// Each value corresponds to a time at which a sensor value was taken and
-    /// the ADC value read at that time.
+    /// Each value corresponds to a time at which a sensor value was taken and the ADC value read at
+    /// that time.
     SensorValue {
         /// The group which generated the readings.
         group_id: u8,
@@ -58,8 +58,7 @@ pub struct SensorReading {
 /// * `M`: the type of the log file to be written to.
 pub struct DashChannel<C: Write, M: Write> {
     /// A channel for the dashboard.
-    /// If writing to this channel fails, it will be immediately overwritten
-    /// with `None`.
+    /// If writing to this channel fails, it will be immediately overwritten with `None`.
     /// When `dash_channel` is `None`, nothing will be written.
     dash_channel: Option<C>,
     /// The log file for all messages that are sent.
@@ -82,8 +81,7 @@ impl<C: Write, M: Write> DashChannel<C, M> {
     ///     
     /// # Errors
     ///
-    /// This function will return an `Err` if we are unable to write to the
-    /// message log.
+    /// This function will return an `Err` if we are unable to write to the message log.
     ///
     /// # Panics
     ///
@@ -114,8 +112,7 @@ impl<C: Write, M: Write> DashChannel<C, M> {
         Ok(())
     }
 
-    /// Determine whether this channel actually has a target to send messages
-    /// to.
+    /// Determine whether this channel actually has a target to send messages to.
     pub fn has_target(&self) -> bool {
         self.dash_channel.is_some()
     }
@@ -134,8 +131,8 @@ mod tests {
 
     use super::*;
 
-    /// Helper function to test that the serialized result is the same as the
-    /// expected result, independent of whitespace or key ordering.
+    /// Helper function to test that the serialized result is the same as the expected result,
+    /// independent of whitespace or key ordering.
     fn serialize_helper(expected: &str, message: &Message) {
         let message_value = serde_json::to_value(message).unwrap();
         let expected_value = serde_json::from_str::<Value>(expected).unwrap();

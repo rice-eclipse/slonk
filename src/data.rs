@@ -24,39 +24,29 @@ use crate::{
 ///
 /// # Inputs
 ///
-/// * `thread_scope`: A reference to a scope that this function can use to spawn
-///     other threads.
-///     This is required so that the sensor listener thread can emergency-stop,
-///     if needed.
-/// * `group_id`: The ID of the sensor group that this thread is responsible
-///     for.
-///     This is equal to the index of the sensor group in the configuration
-///     object.
+/// * `thread_scope`: A reference to a scope that this function can use to spawn other threads.
+///     This is required so that the sensor listener thread can emergency-stop, if needed.
+/// * `group_id`: The ID of the sensor group that this thread is responsible for.
+///     This is equal to the index of the sensor group in the configuration object.
 /// * `adcs`: The set of ADCs which can be read from by the sensors.
 /// * `configuration`: The primary configuration of the controller.
 /// * `driver_lines`: The GPIO lines for each driver.
-/// * `log_files`: Handles for log files associated with the sensors in this
-///     sensor group.
+/// * `log_files`: Handles for log files associated with the sensors in this sensor group.
 ///     Each index corresponds exactly to its associated index in the group.
 /// * `state`: The state of the whole system.
-///     If a sensor enters an invalid value during ignition, this thread will
-///     automatically update the state as needed.
+///     If a sensor enters an invalid value during ignition, this thread will automatically update
+///     the state as needed.
 /// * `dashboard_stream`: A stream where messages can be sent to the dashboard.
 ///
 /// # Errors
 ///
-/// This function may return many errors, but most of the error causes will be
-/// caused by GPIO failures.
-///
-/// For a more exact description of all possible errors, refer to the
-/// documentation for `ControllerError`.
+/// This function will only return an error if the controller state status lock is poisoned.
 ///
 /// # Panics
 ///
 /// This function will panic in any of the following cases:
 ///
-/// * If the value of `group_id` does not correspond to an existing sensor
-///     group.
+/// * If the value of `group_id` does not correspond to an existing sensor group.
 /// * If the current system time is before the UNIX epoch.
 pub fn sensor_listen<'a>(
     thread_scope: &'a Scope<'a, '_>,
@@ -76,15 +66,13 @@ pub fn sensor_listen<'a>(
     // the last time that we sent a sensor status update
     let mut last_transmission_time = SystemTime::now();
 
-    // the most recent reading from each sensor which has *not* already been
-    // sent to the dashboard.
-    // each element will be None if the most recent reading was sent to the
-    // dashboard.
+    // the most recent reading from each sensor which has *not* already been sent to the dashboard.
+    // each element will be None if the most recent reading was sent to the dashboard.
     let mut transmission_readings: Vec<Option<(SystemTime, u16)>> = vec![None; group.sensors.len()];
 
     // most recent values read, to be logged.
-    // in each queue, the "back" contains the most recent readings and the
-    // "front" contains the oldest ones.
+    // in each queue, the "back" contains the most recent readings and the "front" contains the
+    // oldest ones.
     let mut most_recent_readings: Vec<VecDeque<(SystemTime, u16)>> =
         vec![VecDeque::new(); group.sensors.len()];
 
@@ -93,9 +81,8 @@ pub fn sensor_listen<'a>(
         .sensors
         .iter()
         .map(|sensor| {
-            // extract the middle value of the range to seed our rolling
-            // average so that the sensor doesn't immediately start in a "bad"
-            // spot
+            // extract the middle value of the range to seed our rolling average so that the sensor
+            // doesn't immediately start in a "bad" spot
             if let Some((min, max)) = sensor.range {
                 (min + max) / 2.0
             } else {
@@ -135,8 +122,7 @@ pub fn sensor_listen<'a>(
                 / f64::from(width);
             rolling_averages[idx] = rolling_avg;
 
-            // if rolling average went out of bounds, immediately start
-            // emergency stopping
+            // if rolling average went out of bounds, immediately start emergency stopping
             if let Some((min, max)) = sensor.range {
                 #[allow(unused_must_use)]
                 if rolling_avg < min || max < rolling_avg {
@@ -146,8 +132,8 @@ pub fn sensor_listen<'a>(
                     ));
                     // oh no! a sensor is now in an illegal range!
                     // spin up another thread to emergency stop.
-                    // this may return an error due to illegal transistion, but
-                    // that is not our problem.
+                    // this may return an error due to illegal transistion, but that is not our
+                    // problem.
                     thread_scope.spawn(|| {
                         if let Ok(mut drivers_guard) = driver_lines.lock() {
                             emergency_stop(configuration, drivers_guard.as_mut(), state);
@@ -157,8 +143,7 @@ pub fn sensor_listen<'a>(
             }
         }
 
-        // transmit data to the dashboard if it's been long enough since our
-        // last transmission
+        // transmit data to the dashboard if it's been long enough since our last transmission
         if SystemTime::now() > last_transmission_time + transmission_period {
             let mut channel_guard = dashboard_stream.lock()?;
             if channel_guard.has_target() {
@@ -201,10 +186,8 @@ pub fn sensor_listen<'a>(
             }
         }
 
-        // use the system state to determine how long to sleep until the next
-        // loop.
-        // standby means we are sampling slowly, and anything else means we
-        // sample quickly.
+        // use the system state to determine how long to sleep until the next loop.
+        // standby means we are sampling slowly, and anything else means we sample quickly.
         let sleep_time = match state.status()? {
             ControllerState::Standby => standby_period,
             _ => ignition_period,
@@ -235,15 +218,17 @@ pub fn sensor_listen<'a>(
 ///     with one row for every sample.
 ///     `{time}` is the number of nanoseconds since the UNIX epoch.
 /// * `state`: The overall system state.
-///     This function will only return after `State` transitions to
-///     `ControllerState::Quit`.
-/// * `dashboard_stream`: A channel by which messages can be sent to the
-///     dashboard.
+///     This function will only return after `State` transitions to `ControllerState::Quit`.
+/// * `dashboard_stream`: A channel by which messages can be sent to the dashboard.
 ///
 /// # Errors
-/// TODO examine all possible sources of error
+///
+/// This function will return an error if we are unable to acquire a lock or if we are unable to
+/// write to the message log.
 ///
 /// # Panics
+///
+/// This function will panic if the current time is before the UNIX epoch.
 pub fn driver_status_listen(
     configuration: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
@@ -333,8 +318,7 @@ fn write_driver_log(
 ///
 /// * `log_file`: The file to which the log will be written.
 ///     There must be exactly one log file per sensor.
-/// * `adc_readings`: All the most recent sensor readings to be written to the
-///     file.
+/// * `adc_readings`: All the most recent sensor readings to be written to the file.
 ///
 /// # Results
 ///
@@ -343,12 +327,11 @@ fn write_driver_log(
 /// 1. The time since the UNIX epoch, in nanoseconds.
 /// 1. The raw ADC value of the sensor at this time.
 /// Will also include a trailing newline after the last row.
-/// At the end of writing all of these lines, the file will be "flushed,"
-/// meaning that all data will be immediately saved.
+/// At the end of writing all of these lines, the file will be "flushed," meaning that all data will
+/// be immediately saved.
 ///
-/// For instance, if a sensor had a reading of 42 at a time of 1 second, 500
-/// nanoseconds after the UNIX epoch began, the following text would be
-/// written:
+/// For instance, if a sensor had a reading of 42 at a time of 1 second, 500 nanoseconds after the
+/// UNIX epoch began, the following text would be written:
 ///
 /// ```text
 /// 1000000500,42
@@ -363,8 +346,7 @@ fn write_driver_log(
 ///
 /// # Panics
 ///
-/// This function will panic if a time contained in the ADC readings was before
-/// the UNIX epoch.
+/// This function will panic if a time contained in the ADC readings was before the UNIX epoch.
 fn write_sensor_log<'a>(
     log_file: &mut impl Write,
     adc_readings: impl IntoIterator<Item = &'a (SystemTime, u16)>,
@@ -400,8 +382,7 @@ mod tests {
     #[test]
     #[allow(clippy::too_many_lines)]
     fn data_written() {
-        // create some dummy configuration for the sensor listener thread to
-        // read
+        // create some dummy configuration for the sensor listener thread to read
         let config = r#"{
             "frequency_status": 10,
             "log_buffer_size": 1,
@@ -545,8 +526,7 @@ mod tests {
     #[test]
     /// Test that an emergency stop is successfully called.
     fn estop_called() {
-        // create some dummy configuration for the sensor listener thread to
-        // read
+        // create some dummy configuration for the sensor listener thread to read
         let config = r#"{
             "frequency_status": 10,
             "log_buffer_size": 1,

@@ -23,20 +23,17 @@ use std::{
 /// * `log_file`: Location where log information will be written.
 /// * `configuration`: Configuration object for program execution.
 /// * `driver_lines`: Output lines for the drivers.
-///     Each index in `driver_lines` corresponds one-to-one with the drivers in
-///     `configuration`.  
+///     Each index in `driver_lines` corresponds one-to-one with the drivers in `configuration`.  
 /// * `state`: The controller for the current system state.
-/// * `dashboard_stream`: The stream to use for writing messages to the
-///     dashboard.
+/// * `dashboard_stream`: The stream to use for writing messages to the dashboard.
 ///
 /// # Errors
 ///
-/// TODO: fully examine all callees to describe possible errors.
+/// This function will return an error if a lock is poisoned or if we are unable to actuate GPIO.
 ///
 /// # Panics
 ///
-/// This function will panic if the current system time is before the UNIX
-/// epoch.
+/// This function will panic if the current system time is before the UNIX epoch.
 pub fn handle_command(
     cmd: &Command,
     log_file: &mut impl Write,
@@ -96,8 +93,7 @@ pub fn handle_command(
 ///
 /// This function can return an `Err` in the following cases:
 ///
-/// * The user attempted to perform an ignition from a state which was not
-///     standby.
+/// * The user attempted to perform an ignition from a state which was not standby.
 /// * A lock was poisoned.
 /// * We failed to gain control over GPIO.
 pub fn emergency_stop(
@@ -122,8 +118,7 @@ pub fn emergency_stop(
 ///
 /// This function can return an `Err` in the following cases:
 ///
-/// * The user attempted to perform an ignition from a state which was not
-///     standby.
+/// * The user attempted to perform an ignition from a state which was not standby.
 /// * A lock was poisoned.
 /// * We failed to gain control over GPIO.
 fn ignition(
@@ -159,12 +154,12 @@ fn ignition(
 ///     An ID is an index into `configuration.drivers` for the associated driver.
 ///     It is also the same index into `driver_lines`.
 /// * `value`: The logic level that the driver should be actuated to.
-///     `value` should be `true` to get a high value on the GPIO pin, and
-///     `false` for a low value.
+///     `value` should be `true` to get a high value on the GPIO pin, and `false` for a low value.
 ///
 /// # Errors
 ///
-/// This function may return an error if we are unable to gain control over the GPIO pin associated with the driver.
+/// This function may return an error if we are unable to gain control over the GPIO pin associated
+/// with the driver.
 fn actuate_driver(
     driver_lines: &mut [impl GpioPin],
     driver_id: u8,
@@ -180,7 +175,7 @@ fn actuate_driver(
 ///
 /// # Errors
 ///
-/// TODO
+/// This function will return an error if we are unable to write to GPIO.
 fn perform_actions(
     driver_lines: &mut [impl GpioPin],
     actions: &[Action],
@@ -298,8 +293,7 @@ mod tests {
     }
 
     #[test]
-    /// Test that the correct sequence of state transistions are performed
-    /// during an emergency stop.
+    /// Test that the correct sequence of state transistions are performed during an emergency stop.
     fn estop_state_transitions() {
         let config = r#"{
             "frequency_status": 1,
@@ -345,8 +339,7 @@ mod tests {
     }
 
     #[test]
-    /// Test that driver actuations are performed correctly during emergency
-    /// stop.
+    /// Test that driver actuations are performed correctly during emergency stop.
     fn estop_actuation() {
         let config = r#"{
             "frequency_status": 1,

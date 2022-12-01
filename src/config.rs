@@ -8,25 +8,25 @@ use crate::hardware::{ListenerPin, Mcp3208};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 /// A configuration for the entire engine controller.
-/// Contains all necessary data for both the controller and dashboard to
-/// operate correctly.
+/// Contains all necessary data for both the controller and dashboard to operate correctly.
 pub struct Configuration {
-    /// The frequency at which driver and system status updates should be sent
-    /// to the dashboard.
+    /// The frequency at which driver and system status updates should be sent to the dashboard.
     pub frequency_status: u32,
     /// The size that a log buffer should be.
     /// When a log buffer fills up, its readings are saved to a log file.
     pub log_buffer_size: usize,
-    /// The families of sensors, each having their own frequencies and manager
-    /// threads.
+    /// The families of sensors, each having their own frequencies and manager threads.
     pub sensor_groups: Vec<SensorGroup>,
     /// The drivers, which actuate external digital pins.
     pub drivers: Vec<Driver>,
-    /// The amount of time to wait in a pre-ignition state after processing an
+    /// The amount of time (in millsieconds) to wait in a pre-ignition state after processing an
     /// ignition command.
     ///
-    /// During pre-ignition, the sensor logging rate is fast, but no actual
-    /// ignition has happened yet.
+    /// During pre-ignition, the sensor logging rate is fast, but no actual ignition has happened
+    /// yet.
+    ///
+    /// This value is *not* the duration of the count down; it is only used for thread
+    /// synchronization.
     pub pre_ignite_time: u32,
     /// The amount of time to wait in a post-ignition state after processing an
     /// ignition command.
@@ -88,8 +88,7 @@ pub struct SensorGroup {
     pub frequency_standby: u32,
     /// The frequency at which data should be collected while in ignition mode.
     pub frequency_ignition: u32,
-    /// The frequency at which data should be transmitted to the dashboard from
-    /// this sensor group.
+    /// The frequency at which data should be transmitted to the dashboard from this sensor group.
     /// If no data is available, no new data will be sent.
     pub frequency_transmission: u32,
     /// The set of sensors managed by this sensor group.
@@ -107,36 +106,31 @@ pub struct Sensor {
     /// value of this sensor can take be allowed to take on until an estop is triggered.
     pub range: Option<(f64, f64)>,
     /// The intercept of the linear calibration function for this sensor.
-    /// In the expression of the calibration function `y = mx + b`, this would
-    /// be `b`.
+    /// In the expression of the calibration function `y = mx + b`, this would be `b`.
     pub calibration_intercept: f64,
     /// The slope of the linear calibration function for this sensor.
-    /// In the expression of the calibration function `y = mx + b`, this would
-    /// be `m`.
+    /// In the expression of the calibration function `y = mx + b`, this would be `m`.
     pub calibration_slope: f64,
-    /// The width of a rolling average for this device, used to filter data on
-    /// the controller side.
+    /// The width of a rolling average for this device, used to filter data on the controller side.
     pub rolling_average_width: Option<u32>,
     /// The ID of the ADC used by this device.
     /// This maps to the field `adc_cs` in `Configuration`.
-    /// For instance, if the value of `adc` is 2, and `adc[2]` is 33, then this
-    /// sensor uses the ADC with chip select pin 33.
+    /// For instance, if the value of `adc` is 2, and `adc[2]` is 33, then this sensor uses the ADC
+    /// with chip select pin 33.
     pub adc: u8,
-    /// The channel on the ADC to use for
+    /// The channel on the ADC to to read raw sensor data from.
     pub channel: u8,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 /// The set of errors that can occur when validating a configuration.
 pub enum Error {
-    /// The configuration was malformed and could not be parsed into a
-    /// `Configuration`object.
-    /// A string is given describing the cause of the error.
+    /// The configuration was malformed and could not be parsed into a`Configuration` object.
+    /// The string is a description of the cause of the error.
     Malformed(String),
     /// A sensor's definition referred to an ADC which did not exist.
     NoSuchAdc,
-    /// A sensor's definition referred to a channel which is out of bounds on an
-    /// ADC.
+    /// A sensor's definition referred to a channel which is out of bounds on an ADC.
     BadChannel,
     /// The SPI clock frequency was set too slow.
     ClockTooSlow,
@@ -144,13 +138,12 @@ pub enum Error {
 
 impl Configuration {
     /// Construct a new `Configuration` by parsing some readable source.
-    /// Will also check the configuration to determine that there are no logical
-    /// inconsistencies in its definition.
+    /// Will also check the configuration to determine that there are no logical inconsistencies in
+    /// its definition.
     ///
     /// # Errors
     ///
-    /// This function will return errors in line with the definition of `Error`
-    /// in this module.
+    /// This function will return errors in line with the definition of `Error` in this module.
     pub fn parse(source: &mut impl Read) -> Result<Configuration, Error> {
         // deserialize the configuration
         let config: Configuration =

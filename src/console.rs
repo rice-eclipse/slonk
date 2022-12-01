@@ -12,20 +12,16 @@ pub struct UserLog<W: Write> {
 /// The levels for logging.
 pub enum LogLevel {
     /// The lowest log level.
-    /// Used exclusively for displaying random garbage to help the developer
-    /// debug their problems.
+    /// Used exclusively for displaying random garbage to help the developer debug their problems.
     Debug = 0,
     /// The second-lowest log level.
-    /// Used for information which might be useful to have after an event
-    /// occurs.
+    /// Used for information which might be useful to have after an event occurs.
     Info = 1,
     /// The second-highest log level.
-    /// Used for notifying the user of potential problems, but which are
-    /// nonfatal.
+    /// Used for notifying the user of potential problems, but which are nonfatal.
     Warn = 2,
     /// The highest log level.
-    /// Used for notifying the user of absolutely critical information which is
-    /// fatal to the system.
+    /// Used for notifying the user of absolutely critical information which is fatal to the system.
     Critical = 3,
 }
 
@@ -87,7 +83,7 @@ impl<W: Write> UserLog<W> {
     ///
     /// # Errors
     ///
-    /// This function will return an `Error` if we are unable to write to the
+    /// This function will return an `Error` if we are unable to write to the log buffer.
     ///
     /// # Panics
     ///
