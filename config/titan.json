@@ -98,27 +98,27 @@
     "drivers": [
         {
             "label": "FEED",
-            "pin": 11
+            "pin": 17
         },
         {
             "label": "OXI_VENT",
-            "pin": 13
+            "pin": 27
         },
         {
             "label": "GND_VENT",
-            "pin": 15
+            "pin": 22
         },
         {
             "label": "UNUSED1",
-            "pin": 18
+            "pin": 24
         },
         {
             "label": "UNUSED2",
-            "pin": 33
+            "pin": 13
         },
         {
             "label": "IGN_START",
-            "pin": 32
+            "pin": 12
         }
     ],
     "pre_ignite_time": 1000,
@@ -169,8 +169,8 @@
     "spi_clk": 11,
     "spi_frequency_clk": 50000,
     "adc_cs": [
-        26,
-        24,
-        22
+        25,
+        8,
+        7
     ]
 }
