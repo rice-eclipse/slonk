@@ -135,7 +135,7 @@ fn main() -> Result<(), ControllerError> {
                 gpio_chip
                     .get_line(u32::from(driver.pin))
                     .unwrap()
-                    .request(LineRequestFlags::all(), 0, "slonk")
+                    .request(LineRequestFlags::OUTPUT, 0, "slonk")
                     .unwrap()
             })
             .collect(),
