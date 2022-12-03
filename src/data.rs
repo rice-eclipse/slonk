@@ -174,15 +174,17 @@ pub fn sensor_listen<'a>(
             transmission_readings = vec![None; group.sensors.len()];
         }
 
-        for (sensor_id, reading_queue) in most_recent_readings.iter().enumerate() {
+        for (sensor_id, reading_queue) in most_recent_readings.iter_mut().enumerate() {
             if reading_queue.len() >= configuration.log_buffer_size {
                 #[allow(unused_must_use)]
-                if let Err(e) = write_sensor_log(&mut log_files[sensor_id], reading_queue) {
+                if let Err(e) = write_sensor_log(&mut log_files[sensor_id], reading_queue.iter()) {
                     user_log.warn(&format!(
                         "unable to write data for sensor {}: {e:?}",
                         group.sensors[sensor_id].label
                     ));
                 }
+
+                reading_queue.clear();
             }
         }
 
@@ -518,8 +520,7 @@ mod tests {
             // check that sensor readings got written in the right columns
             assert_eq!(tokens[1], format!("{idx}").as_str());
             assert_eq!(tokens[3], format!("{idx}").as_str());
-            assert_eq!(tokens[5], format!("{idx}").as_str());
-            assert_eq!(tokens[6], "");
+            assert_eq!(tokens[4], "");
         }
     }
 
