@@ -1,8 +1,8 @@
 use std::{
     fs::{create_dir_all, File},
-    io::{BufReader, Read, Write},
+    io::{self, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Mutex,
     time::Duration,
 };
@@ -35,15 +35,24 @@ fn main() -> Result<(), ControllerError> {
     println!("=== slonk by Rice Eclipse ===");
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Use arguments to get configuration file
-    let json_path = args.get(0).ok_or(ControllerError::Args)?;
-    let logs_path = args.get(1).ok_or(ControllerError::Args)?;
+    let json_path = args
+        .get(0)
+        .ok_or_else(|| ControllerError::Args("No configuration JSON path given".to_string()))?;
+    let logs_path = args
+        .get(1)
+        .ok_or_else(|| ControllerError::Args("No logs path given".to_string()))?;
 
     create_dir_all(logs_path)?;
-    let user_log = UserLog::new(File::create(PathBuf::from_iter([
+    let user_log = UserLog::new(file_create_new(PathBuf::from_iter([
         logs_path,
         "console.txt",
     ]))?);
     let user_log_ref = &user_log;
+    if args.len() > 2 {
+        user_log.warn(
+            "More than two arguments given to controller executable. Ignoring extra arguments.",
+        )?;
+    }
 
     user_log.debug("Parsing configuration file...")?;
     let config_file = File::open(json_path)?;
@@ -68,7 +77,7 @@ fn main() -> Result<(), ControllerError> {
             // create file for this specific sensor
             let mut sensor_file_path = sensor_group_path.clone();
             sensor_file_path.push(&format!("{}.csv", sensor.label));
-            group_files.push(File::create(&sensor_file_path)?);
+            group_files.push(file_create_new(&sensor_file_path)?);
 
             user_log.info(&format!("Created log file {:}", sensor_file_path.display()))?;
         }
@@ -77,10 +86,10 @@ fn main() -> Result<(), ControllerError> {
     }
 
     // create log file for commands that have been executed
-    let mut cmd_file = File::create(PathBuf::from_iter([logs_path, "commands.csv"]))?;
+    let mut cmd_file = file_create_new(PathBuf::from_iter([logs_path, "commands.csv"]))?;
     let cmd_file_ref = &mut cmd_file;
 
-    let mut drivers_file = File::create(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
+    let mut drivers_file = file_create_new(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
     let drivers_file_ref = &mut drivers_file;
 
     user_log.debug("Successfully created log files")?;
@@ -91,7 +100,7 @@ fn main() -> Result<(), ControllerError> {
 
     // when a client connects, the inner value of this mutex will be `Some` containing a TCP stream
     // to the dashboard
-    let to_dash = Mutex::new(DashChannel::new(File::create(PathBuf::from_iter([
+    let to_dash = Mutex::new(DashChannel::new(file_create_new(PathBuf::from_iter([
         logs_path, "sent.csv",
     ]))?));
     let to_dash_ref = &to_dash;
@@ -199,6 +208,19 @@ fn main() -> Result<(), ControllerError> {
     })?;
     // successful termination!
     Ok(())
+}
+
+/// Construct a new file with path `p` if there is not a file already there.
+/// Returns a handle to the file if it was created.
+/// IF the file already exists, returns an error.
+///
+/// TODO: remove this method and substitute with `file_create_new_new()` when it is stabilized.
+fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
+    File::options()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(p)
 }
 
 /// Handle a single dashboard client.
