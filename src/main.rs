@@ -56,11 +56,17 @@ fn main() -> Result<(), ControllerError> {
 
     user_log.debug("Parsing configuration file...")?;
     let config_file = File::open(json_path)?;
-    let config = Configuration::parse(&mut BufReader::new(config_file))?;
+    let config = match Configuration::parse(&mut BufReader::new(config_file)) {
+        Ok(c) => c,
+        Err(e) => {
+            user_log.critical(&format!("Failed to parse configuration: {:?}", e))?;
+            return Err(e.into());
+        }
+    };
     let config_ref = &config;
     user_log.debug("Successfully parsed configuration file")?;
 
-    user_log.debug("Creating configuration files")?;
+    user_log.debug("Creating log files")?;
 
     let mut sensor_log_files: Vec<Vec<File>> = Vec::new();
     for sensor_group in &config.sensor_groups {
@@ -105,7 +111,13 @@ fn main() -> Result<(), ControllerError> {
     ]))?));
     let to_dash_ref = &to_dash;
 
-    let mut gpio_chip = Chip::new("/dev/gpiochip0")?;
+    let mut gpio_chip = match Chip::new("/dev/gpiochip0") {
+        Ok(c) => c,
+        Err(e) => {
+            user_log.critical(&format!("Failed to acquire GPIO chip: {}", e))?;
+            return Err(e.into());
+        }
+    };
     let bus = Mutex::new(Bus {
         period: Duration::from_secs(1) / config.spi_frequency_clk,
         pin_clk: gpio_chip.get_line(config.spi_clk as u32)?.request(
