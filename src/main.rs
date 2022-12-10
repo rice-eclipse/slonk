@@ -93,7 +93,7 @@ fn main() -> Result<(), ControllerError> {
     let drivers_file_ref = &mut drivers_file;
 
     user_log.debug("Successfully created log files")?;
-    user_log.debug("Now spawning sensor listener threads...")?;
+    user_log.debug("Now acquiring GPIO")?;
 
     let state = StateGuard::new(ControllerState::Standby);
     let state_ref = &state;
@@ -150,6 +150,9 @@ fn main() -> Result<(), ControllerError> {
             .collect(),
     );
     let driver_lines_ref = &driver_lines;
+
+    user_log.debug("Successfully acquired GPIO handles")?;
+    user_log.debug("Now spawning sensor listener threads...")?;
 
     std::thread::scope(|s| {
         for (group_id, mut log_file_group) in sensor_log_files.into_iter().enumerate() {
