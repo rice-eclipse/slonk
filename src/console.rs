@@ -95,7 +95,17 @@ impl<W: Write> UserLog<W> {
             .unwrap()
             .as_nanos();
 
+        // use terminal text control characters to change colors
+        match level {
+            LogLevel::Critical => print!("\x1b[31m"), // red
+            LogLevel::Warn => print!("\x1b[33m"),     // yellow
+            LogLevel::Info => (),
+            LogLevel::Debug => print!("\x1b[90m"), // faded
+        };
         println!("[{log_time_nanos}] [{level}] {string}");
+
+        // wipe previous coloring
+        print!("\x1b[0;37m");
         writeln!(
             // we trust writing to the log buffer will not cause a panic.
             self.log_buffer.lock().unwrap(),
