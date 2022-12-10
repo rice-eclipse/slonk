@@ -356,7 +356,7 @@ fn write_sensor_log<'a>(
     for (sys_time, reading) in adc_readings {
         let since_epoch_time = sys_time.duration_since(SystemTime::UNIX_EPOCH).unwrap();
 
-        writeln!(log_file, "{},{}", since_epoch_time.as_nanos(), reading)?;
+        writeln!(log_file, "{},{reading}", since_epoch_time.as_nanos())?;
     }
 
     log_file.flush()

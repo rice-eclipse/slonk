@@ -112,7 +112,7 @@ impl Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Command::Ready => write!(f, "ready"),
-            Command::Actuate { driver_id, value } => write!(f, "actuate {} {}", driver_id, value),
+            Command::Actuate { driver_id, value } => write!(f, "actuate {driver_id} {value}"),
             Command::Ignition => write!(f, "ignition"),
             Command::EmergencyStop => write!(f, "estop"),
         }

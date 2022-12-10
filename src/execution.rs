@@ -53,7 +53,7 @@ pub fn handle_command(
     }
 
     #[allow(unused_must_use)]
-    if let Err(e) = writeln!(log_file, "{},request,{}", time.as_nanos(), cmd) {
+    if let Err(e) = writeln!(log_file, "{},request,{cmd}", time.as_nanos()) {
         user_log.warn(&format!("Unable to log command {cmd} to log file: {e:?}"));
     }
 
@@ -79,7 +79,7 @@ pub fn handle_command(
         .unwrap();
 
     #[allow(unused_must_use)]
-    if let Err(e) = writeln!(log_file, "{},finish,{}", time.as_nanos(), cmd) {
+    if let Err(e) = writeln!(log_file, "{},finish,{cmd}", time.as_nanos()) {
         user_log.warn(&format!(
             "Unable to log completion of command {cmd} to log file: {e:?}"
         ));
