@@ -146,8 +146,8 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
         // Second byte received:
         // 3 high-Z values
         // 1 zero (null)
-        // --
         // B11..=B8 (high 4 bits of ADC reading)
+        // --
         // Third byte received:
         // B7..=B0 (low 8 bits of ADC reading)
 
