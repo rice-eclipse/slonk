@@ -73,7 +73,7 @@ pub fn sensor_listen<'a>(
     // most recent values read, to be logged.
     // in each queue, the "back" contains the most recent readings and the "front" contains the
     // oldest ones.
-    let mut most_recent_readings: Vec<VecDeque<(SystemTime, u16)>> =
+    let mut most_recent_readings: Vec<VecDeque<(SystemTime, u16, f64)>> =
         vec![VecDeque::new(); group.sensors.len()];
 
     // Rolling average values for sensor readings.
@@ -112,12 +112,12 @@ pub fn sensor_listen<'a>(
                 continue;
             };
             let read_time = SystemTime::now();
-            most_recent_readings[idx].push_back((read_time, reading));
+            let calibrated_value =
+                f64::from(reading) * sensor.calibration_slope + sensor.calibration_intercept;
+            most_recent_readings[idx].push_back((read_time, reading, calibrated_value));
             transmission_readings[idx] = Some((read_time, reading));
             // update rolling averages
             let width = sensor.rolling_average_width.unwrap_or(1);
-            let calibrated_value =
-                f64::from(reading) * sensor.calibration_slope + sensor.calibration_intercept;
             let rolling_avg = (rolling_averages[idx] * (f64::from(width - 1)) + calibrated_value)
                 / f64::from(width);
             rolling_averages[idx] = rolling_avg;
@@ -333,10 +333,11 @@ fn write_driver_log(
 /// be immediately saved.
 ///
 /// For instance, if a sensor had a reading of 42 at a time of 1 second, 500 nanoseconds after the
-/// UNIX epoch began, the following text would be written:
+/// UNIX epoch began, and the calibrated reading from the sensor was 1.25, the following text would
+/// be written:
 ///
 /// ```text
-/// 1000000500,42
+/// 1000000500,42,1.24
 ///
 /// ```
 ///
@@ -351,12 +352,16 @@ fn write_driver_log(
 /// This function will panic if a time contained in the ADC readings was before the UNIX epoch.
 fn write_sensor_log<'a>(
     log_file: &mut impl Write,
-    adc_readings: impl IntoIterator<Item = &'a (SystemTime, u16)>,
+    adc_readings: impl IntoIterator<Item = &'a (SystemTime, u16, f64)>,
 ) -> std::io::Result<()> {
-    for (sys_time, reading) in adc_readings {
+    for (sys_time, reading, calib) in adc_readings {
         let since_epoch_time = sys_time.duration_since(SystemTime::UNIX_EPOCH).unwrap();
 
-        writeln!(log_file, "{},{reading}", since_epoch_time.as_nanos())?;
+        writeln!(
+            log_file,
+            "{},{reading},{calib}",
+            since_epoch_time.as_nanos()
+        )?;
     }
 
     log_file.flush()
@@ -511,16 +516,16 @@ mod tests {
             .collect();
 
         for (idx, logged_string) in logged_strings.iter().enumerate() {
-            let tokens = logged_string
-                .split(',')
-                .flat_map(|s| s.split('\n'))
-                .map(String::from)
-                .collect::<Vec<_>>();
+            let adc_readings = logged_string
+                .split('\n')
+                .filter_map(|l| Some(l.split(',').nth(1)?.parse::<usize>().unwrap()))
+                .collect::<Vec<usize>>();
 
-            // check that sensor readings got written in the right columns
-            assert_eq!(tokens[1], format!("{idx}").as_str());
-            assert_eq!(tokens[3], format!("{idx}").as_str());
-            assert_eq!(tokens[4], "");
+            for &adc_val in &adc_readings {
+                assert_eq!(adc_val, idx);
+            }
+
+            assert_eq!(adc_readings.len(), 2);
         }
     }
 
