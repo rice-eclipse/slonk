@@ -117,9 +117,20 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
     fn read(&mut self, channel: u8) -> Result<u16, ControllerError> {
         assert!((0..8).contains(&channel));
 
-        // We send two "high" bits, and then the channel ID to tell the ADC to use differential mode
-        // and read from the channel
-        let outgoing = [0x18 | channel, 0, 0];
+        // First byte sent:
+        // 5 zeros (don't tell the ADC to start just yet)
+        // Start bit: 1 (tell ADC to start listening)
+        // SGL/DIFF bit: 1
+        // D2: highest bit of channel ID
+        // --
+        // Second byte sent:
+        // D1: second-highest bit of channel ID
+        // D0: LSB of channel ID
+        // 6 zeros (don't matter)
+        // --
+        // Third byte sent:
+        // 8 zeros (don't matter)
+        let outgoing = [0x6 | channel >> 2, (channel & 0x3) << 6, 0];
         // this buffer will be populated with ADC data by the time we're done
         let mut incoming = [0; 3];
 
@@ -128,6 +139,27 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
 
         // perform an SPI transfer
         self.device.transfer(&outgoing, &mut incoming)?;
+
+        // First byte received:
+        // 8 high-Z values
+        // --
+        // Second byte received:
+        // 3 high-Z values
+        // 1 zero (null)
+        // --
+        // B11..=B8 (high 4 bits of ADC reading)
+        // Third byte received:
+        // B7..=B0 (low 8 bits of ADC reading)
+
+        // Verify that we receieved a null bit (implies the ADC is actually any good)
+        if incoming[1] & 0x10 != 0 {
+            return Err(ControllerError::Hardware(
+                "no null bit received from ADC - is it connected?",
+            ));
+        }
+
+        // Mask out high-Z data in incoming bytes
+        incoming[1] &= 0x0F;
 
         // the back two bytes of `incoming` now have our data in big endian representation.
         Ok(u16::from_be_bytes([incoming[1], incoming[2]]))

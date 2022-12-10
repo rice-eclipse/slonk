@@ -61,6 +61,8 @@ pub enum ControllerError {
     Serde(serde_json::Error),
     /// There was an error while attempting to perform some GPIO action.
     Gpio(gpio_cdev::Error),
+    /// Something went wrong with the hardware.
+    Hardware(&'static str),
     /// The configuration was incorrectly formed.
     Configuration(config::Error),
     /// The user gave the wrong input arguments to the main executable.
