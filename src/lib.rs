@@ -56,7 +56,9 @@ pub enum ControllerError {
     /// The library `serde_json` failed to deserialize a structure because it was malformed.
     MalformedDeserialize(serde_json::Error),
     /// There was an I/O error when writing to or reading from the network or a file.
-    Io,
+    Io(std::io::Error),
+    /// There was an error with serialization or deserialization.
+    Serde(serde_json::Error),
     /// There was an error while attempting to perform some GPIO action.
     Gpio(gpio_cdev::Error),
     /// The configuration was incorrectly formed.
@@ -153,10 +155,7 @@ impl<T> From<PoisonError<T>> for ControllerError {
 
 impl From<serde_json::Error> for ControllerError {
     fn from(err: serde_json::Error) -> Self {
-        match err.classify() {
-            serde_json::error::Category::Io => ControllerError::Io,
-            _ => ControllerError::MalformedDeserialize(err),
-        }
+        ControllerError::Serde(err)
     }
 }
 
@@ -173,7 +172,7 @@ impl From<config::Error> for ControllerError {
 }
 
 impl From<std::io::Error> for ControllerError {
-    fn from(_: std::io::Error) -> Self {
-        ControllerError::Io
+    fn from(err: std::io::Error) -> Self {
+        ControllerError::Io(err)
     }
 }

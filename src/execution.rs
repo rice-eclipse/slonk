@@ -60,10 +60,7 @@ pub fn handle_command(
     match cmd {
         Command::Ready => {
             // write "ready" to the dashboard
-            dashboard_stream
-                .lock()?
-                .send(&Message::Ready)
-                .map_err(|_| ControllerError::Io)?;
+            dashboard_stream.lock()?.send(&Message::Ready)?;
         }
         Command::Actuate { driver_id, value } => {
             actuate_driver(driver_lines.lock()?.as_mut(), *driver_id, *value)?;
