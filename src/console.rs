@@ -105,7 +105,7 @@ impl<W: Write> UserLog<W> {
         println!("[{log_time_nanos}] [{level}] {string}");
 
         // wipe previous coloring
-        print!("\x1b[0;37m");
+        print!("\x1b[0m");
         writeln!(
             // we trust writing to the log buffer will not cause a panic.
             self.log_buffer.lock().unwrap(),
