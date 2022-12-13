@@ -301,25 +301,6 @@ controller to receive from the dashboard:
 }
 ```
 
-### Dashboard to controller
-
-Messages from the dashboard to the controller may or may not be processed
-sequentially.
-For safety reasons (accepting an emergency stop during an active message), each
-message received will receive its own thread to process it.
-
-#### Ready
-
-A `Ready` message is sent immediately after the controller has fully parsed a
-`Configuration` message and is ready to accept new messages from the controller.
-The `ready` message has no extra fields.
-
-```json
-{
-  "type": "Ready"
-}
-```
-
 #### Driver actuation
 
 All driver actuation messages will have the type `Actuate`.

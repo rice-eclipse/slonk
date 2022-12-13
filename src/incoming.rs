@@ -8,8 +8,6 @@ use std::{fmt::Display, io::Read};
 #[serde(tag = "type")]
 /// A parsed command received from the controller, which is now ready to be executed.
 pub enum Command {
-    /// The dashboard requested to know if the controller is ready to begin.
-    Ready,
     /// The dashboard requested that the driver be actuated to a logic level.
     Actuate {
         /// A string identifying the driver.
@@ -111,7 +109,6 @@ impl Command {
 impl Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Command::Ready => write!(f, "ready"),
             Command::Actuate { driver_id, value } => write!(f, "actuate {driver_id} {value}"),
             Command::Ignition => write!(f, "ignition"),
             Command::EmergencyStop => write!(f, "estop"),
@@ -130,15 +127,6 @@ mod tests {
     fn parse_helper(message: &str) -> Result<Command, ParseError> {
         let mut cursor = Cursor::new(message);
         Command::parse(&mut cursor)
-    }
-
-    #[test]
-    /// Test that a `Ready` command is correctly parsed.
-    fn ready() {
-        let message = r#"{
-            "type": "Ready"
-        }"#;
-        assert_eq!(parse_helper(message), Ok(Command::Ready));
     }
 
     #[test]

@@ -210,7 +210,6 @@ fn main() -> Result<(), ControllerError> {
                 .set_channel(TcpStream::connect(from_dash.peer_addr()?)?);
             handle_client(
                 &mut from_dash,
-                to_dash_ref,
                 config_ref,
                 driver_lines_ref,
                 cmd_file_ref,
@@ -241,7 +240,6 @@ fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
 /// Handle a single dashboard client.
 fn handle_client(
     from_dash: &mut impl Read,
-    to_dash: &Mutex<DashChannel<impl Write, impl Write>>,
     config: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
     cmd_log_file: &mut impl Write,
@@ -268,7 +266,6 @@ fn handle_client(
             config,
             driver_lines,
             state_ref,
-            to_dash,
         ) {
             #[allow(unused_must_use)]
             {
