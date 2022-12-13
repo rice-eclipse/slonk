@@ -228,7 +228,7 @@ fn main() -> Result<(), ControllerError> {
 /// Returns a handle to the file if it was created.
 /// IF the file already exists, returns an error.
 ///
-/// TODO: remove this method and substitute with `file_create_new_new()` when it is stabilized.
+/// TODO: remove this method and substitute with `File::create_new()` when it is stabilized.
 fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
     File::options()
         .read(true)
