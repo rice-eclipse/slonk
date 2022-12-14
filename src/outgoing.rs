@@ -1,7 +1,11 @@
 //! Specification of "outbound" parts of the API, which travel from controller
 //! to dashboard.
 
-use std::{io::Write, time::SystemTime};
+use std::{
+    io::Write,
+    sync::{Arc, Mutex},
+    time::SystemTime,
+};
 
 use serde::Serialize;
 
@@ -58,7 +62,7 @@ pub struct DashChannel<C: Write, M: Write> {
     /// A channel for the dashboard.
     /// If writing to this channel fails, it will be immediately overwritten with `None`.
     /// When `dash_channel` is `None`, nothing will be written.
-    dash_channel: Option<C>,
+    dash_channel: Option<Arc<Mutex<C>>>,
     /// The log file for all messages that are sent.
     message_log: M,
 }
@@ -85,8 +89,9 @@ impl<C: Write, M: Write> DashChannel<C, M> {
     ///
     /// This function will panic if the current time is before the UNIX epoch.
     pub fn send(&mut self, message: &Message) -> Result<(), ControllerError> {
-        if let Some(ref mut dash_writer) = self.dash_channel {
-            if serde_json::to_writer(dash_writer, message).is_ok() {
+        if let Some(ref dash_writer) = self.dash_channel {
+            let mut to_dash_stream = dash_writer.lock()?;
+            if serde_json::to_writer(&mut *to_dash_stream, message).is_ok() {
                 // log that we sent this message to the dashboard
                 // first, mark the time
                 write!(
@@ -101,9 +106,6 @@ impl<C: Write, M: Write> DashChannel<C, M> {
                 serde_json::to_writer(&mut self.message_log, message)?;
                 // then a trailing newline
                 writeln!(self.message_log)?;
-            } else {
-                // failed to send message, so the client must have closed.
-                self.dash_channel = None;
             };
         }
 
@@ -116,7 +118,7 @@ impl<C: Write, M: Write> DashChannel<C, M> {
     }
 
     /// Set the outgoing channel for this stream to be `channel`.
-    pub fn set_channel(&mut self, channel: C) {
+    pub fn set_channel(&mut self, channel: Arc<Mutex<C>>) {
         self.dash_channel = Some(channel);
     }
 }

@@ -369,7 +369,7 @@ fn write_sensor_log<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor, thread::scope};
+    use std::{io::Cursor, sync::Arc, thread::scope};
 
     use serde_json::Value;
 
@@ -446,7 +446,7 @@ mod tests {
         output_stream
             .lock()
             .unwrap()
-            .set_channel(&mut output_stream_buf);
+            .set_channel(Arc::new(Mutex::new(&mut output_stream_buf)));
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here

@@ -1,10 +1,10 @@
 use std::{
     fs::{create_dir_all, File},
     io::{self, BufReader, Read, Write},
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     os::unix::io::AsRawFd,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -211,21 +211,19 @@ fn main() -> Result<(), ControllerError> {
         user_log.debug("Handling clients...")?;
 
         for client_res in listener.incoming() {
-            let mut from_dash = match client_res {
-                Ok(i) => i,
+            let stream = match client_res {
+                Ok(i) => Arc::new(Mutex::new(i)),
                 Err(e) => {
                     user_log.warn(&format!("failed to collect incoming client: {}", e))?;
                     continue;
                 }
             };
-            user_log.info(&format!("Accepted client {:?}", from_dash.peer_addr()))?;
-            to_dash
-                .lock()?
-                .set_channel(TcpStream::connect(from_dash.peer_addr()?)?);
+            user_log.info(&format!("Accepted client {:?}", stream.lock()?.peer_addr()))?;
+            to_dash.lock()?.set_channel(Arc::clone(&stream));
 
             user_log.debug("Overwrote to dashboard lock, now reading commands")?;
             handle_client(
-                &mut from_dash,
+                &stream,
                 config_ref,
                 driver_lines_ref,
                 cmd_file_ref,
@@ -255,7 +253,7 @@ fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
 
 /// Handle a single dashboard client.
 fn handle_client(
-    from_dash: &mut impl Read,
+    from_dash: &Arc<Mutex<impl Read>>,
     config: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
     cmd_log_file: &mut impl Write,
@@ -263,7 +261,7 @@ fn handle_client(
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
     loop {
-        let cmd_deser_result = serde_json::from_reader(&mut *from_dash);
+        let cmd_deser_result = serde_json::from_reader(&mut *from_dash.lock()?);
 
         let Ok(cmd) = cmd_deser_result else {
             #[allow(unused_must_use)] {
