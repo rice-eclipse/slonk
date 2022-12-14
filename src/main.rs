@@ -198,7 +198,7 @@ fn main() -> Result<(), ControllerError> {
         user_log.debug("Opening network...")?;
 
         // TODO: maybe configure this IP number?
-        let address = "127.0.0.1:1234";
+        let address = "192.168.1.138:1234";
         let listener = TcpListener::bind(address)?;
 
         user_log.info(&format!("Opened TCP listener on address {address}"))?;
