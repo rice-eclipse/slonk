@@ -304,10 +304,9 @@ fn handle_client(
             driver_lines,
             state_ref,
         ) {
-            #[allow(unused_must_use)]
-            {
-                user_log.critical(&format!("encountered error while executing commend: {e:?}"));
-            }
+            user_log.critical(&format!("encountered error while executing commend: {e:?}"))?;
+        } else {
+            user_log.debug("Finished executing command.")?;
         }
     }
 }
