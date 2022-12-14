@@ -222,6 +222,8 @@ fn main() -> Result<(), ControllerError> {
             to_dash
                 .lock()?
                 .set_channel(TcpStream::connect(from_dash.peer_addr()?)?);
+
+            user_log.info("Overwrote to dashboard lock, now reading commands")?;
             handle_client(
                 &mut from_dash,
                 config_ref,
