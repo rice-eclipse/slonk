@@ -200,7 +200,7 @@ fn main() -> Result<(), ControllerError> {
         user_log.debug("Opening network...")?;
 
         // TODO: maybe configure this IP number?
-        let address = "127.0.0.1:1234";
+        let address = "0.0.0.0:1234";
         let listener = TcpListener::bind(address)?;
         socket::setsockopt(listener.as_raw_fd(), ReusePort, &true).unwrap();
 
