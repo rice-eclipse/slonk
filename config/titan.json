@@ -10,6 +10,7 @@
             "sensors": [
                 {
                     "label": "TC1_OXI",
+                    "color": "fc6453",
                     "units": "°C",
                     "calibration_intercept": 300,
                     "calibration_slope": -0.175,
@@ -17,20 +18,13 @@
                     "channel": 0
                 },
                 {
-                    "label": "TC2_NOZZLE",
+                    "label": "TC2_COMB",
+                    "color": "ef3b9e",
                     "units": "°C",
                     "calibration_intercept": -250,
                     "calibration_slope": 0.1611,
                     "adc": 0,
                     "channel": 1
-                },
-                {
-                    "label": "TC3_COMB",
-                    "units": "°C",
-                    "calibration_intercept": -250,
-                    "calibration_slope": 0.1611,
-                    "adc": 0,
-                    "channel": 2
                 }
             ]
         },
@@ -43,6 +37,7 @@
                 {
                     "label": "PT1_COMB",
                     "units": "psi",
+                    "color": "#ebf927",
                     "calibration_intercept": -270,
                     "calibration_slope": 0.417,
                     "rolling_average_width": 10,
@@ -52,6 +47,7 @@
                 {
                     "label": "PT2_FEED",
                     "units": "psi",
+                    "color": "#1d8718",
                     "calibration_intercept": 1027,
                     "calibration_slope": -0.286,
                     "rolling_average_width": 10,
@@ -61,6 +57,7 @@
                 {
                     "label": "PT3_INJE",
                     "units": "psi",
+                    "color": "#4104d1",
                     "calibration_intercept": 1548,
                     "calibration_slope": -0.415,
                     "rolling_average_width": 10,
@@ -69,6 +66,7 @@
                 },
                 {
                     "label": "PT4_OXI",
+                    "color": "#f9864d",
                     "units": "psi",
                     "calibration_intercept": 1382,
                     "calibration_slope": -0.372,
@@ -86,6 +84,7 @@
             "sensors": [
                 {
                     "label": "LC_MAIN",
+                    "color": "#3292ff",
                     "units": "lb",
                     "calibration_intercept": 0.34,
                     "calibration_slope": 33.2,

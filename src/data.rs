@@ -390,7 +390,7 @@ mod tests {
     #[allow(clippy::too_many_lines)]
     fn data_written() {
         // create some dummy configuration for the sensor listener thread to read
-        let config = r#"{
+        let config = r##"{
             "frequency_status": 10,
             "log_buffer_size": 1,
             "sensor_groups": [
@@ -402,6 +402,7 @@ mod tests {
                     "sensors": [
                         {
                             "label": "dummy_sensor0",
+                            "color": "#ef3b9e",
                             "units": "mops",
                             "calibration_intercept": 0,
                             "calibration_slope": 0,
@@ -410,6 +411,7 @@ mod tests {
                         },
                         {
                             "label": "dummy_sensor1",
+                            "color": "#ef3b9e",
                             "units": "mops",
                             "calibration_intercept": 0,
                             "calibration_slope": 0,
@@ -429,7 +431,7 @@ mod tests {
             "spi_clk": 0,
             "spi_frequency_clk": 50000,
             "adc_cs": [0, 0]
-        }"#;
+        }"##;
         let adcs: Vec<Mutex<ReturnsNumber>> =
             (0..2).map(|n| Mutex::new(ReturnsNumber(n))).collect();
         let mut cfg_cursor = Cursor::new(config);
@@ -533,7 +535,7 @@ mod tests {
     /// Test that an emergency stop is successfully called.
     fn estop_called() {
         // create some dummy configuration for the sensor listener thread to read
-        let config = r#"{
+        let config = r##"{
             "frequency_status": 10,
             "log_buffer_size": 1,
             "sensor_groups": [
@@ -545,6 +547,7 @@ mod tests {
                     "sensors": [
                         {
                             "label": "dummy_sensor0",
+                            "color": "#ef3b9e",
                             "units": "mops",
                             "calibration_intercept": 0,
                             "calibration_slope": 1,
@@ -572,7 +575,7 @@ mod tests {
             "spi_clk": 0,
             "spi_frequency_clk": 50000,
             "adc_cs": [0]
-        }"#;
+        }"##;
 
         let adc = Mutex::new(ReturnsNumber(100));
 

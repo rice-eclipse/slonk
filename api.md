@@ -127,6 +127,8 @@ object with the following fields:
   - `label` - string: The unique identifier for the sensor.
     May not be shared across sensor groups.
 
+  - `color` - string: A color which can be used for displaying the sensor's value.
+
   - `units` - string: The units of the sensor's calibrated value.
 
   - `range` (optional) - array of numbers: The legal range which the calibrated
@@ -354,7 +356,7 @@ shutdown procedure.
 
 #### Configuration setup
 
-A `Configuration` message is given at the start of the conversation, as soon as
+A `Config` message is given at the start of the conversation, as soon as
 the dashboard connects to the controller.
 This transmits the entire contents of the configuration file as a field of the
 message.
