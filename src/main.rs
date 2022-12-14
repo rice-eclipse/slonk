@@ -2,12 +2,14 @@ use std::{
     fs::{create_dir_all, File},
     io::{self, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
+    os::fd::AsRawFd,
     path::{Path, PathBuf},
     sync::Mutex,
     time::Duration,
 };
 
 use gpio_cdev::{Chip, LineRequestFlags};
+use nix::sys::socket::{self, sockopt::ReusePort};
 use slonk::{
     config::Configuration,
     console::UserLog,
@@ -200,6 +202,7 @@ fn main() -> Result<(), ControllerError> {
         // TODO: maybe configure this IP number?
         let address = "192.168.1.138:1234";
         let listener = TcpListener::bind(address)?;
+        socket::setsockopt(listener.as_raw_fd(), ReusePort, &true).unwrap();
 
         user_log.info(&format!("Opened TCP listener on address {address}"))?;
         user_log.debug("Handling clients...")?;
