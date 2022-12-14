@@ -218,7 +218,7 @@ fn main() -> Result<(), ControllerError> {
                     continue;
                 }
             };
-            user_log.info(&format!("Accepted client {:?}", from_dash.local_addr()?))?;
+            user_log.info(&format!("Accepted client {:?}", from_dash.peer_addr()))?;
             to_dash
                 .lock()?
                 .set_channel(TcpStream::connect(from_dash.peer_addr()?)?);
