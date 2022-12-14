@@ -210,7 +210,16 @@ fn main() -> Result<(), ControllerError> {
         ))?;
         user_log.debug("Handling clients...")?;
 
-        for mut from_dash in listener.incoming().flatten() {
+        for client_res in listener.incoming() {
+            let mut from_dash = match client_res {
+                Ok(i) => i,
+                Err(e) => {
+                    user_log
+                        .warn(&format!("failed to collect incoming client: {}", e))
+                        .unwrap();
+                    continue;
+                }
+            };
             to_dash
                 .lock()?
                 .set_channel(TcpStream::connect(from_dash.peer_addr()?)?);
