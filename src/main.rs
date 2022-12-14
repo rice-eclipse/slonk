@@ -261,16 +261,17 @@ fn handle_client(
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
     loop {
-        let cmd_deser_result = serde_json::from_reader(&mut *from_dash.lock()?);
-
-        let Ok(cmd) = cmd_deser_result else {
-            #[allow(unused_must_use)] {
-                // don't kill the process even if we get something bad
-                user_log.critical(&format!(
-                    "encountered error while parsing message. future messages will likely not be parsed correctly: {cmd_deser_result:?}"
-                ));
+        let cmd = match serde_json::from_reader(&mut *from_dash.lock()?) {
+            Ok(cmd) => cmd,
+            Err(e) => {
+                #[allow(unused_must_use)]
+                {
+                    user_log.warn(&format!(
+                        "Could not parse message from dashboard - likely closed connection. {e:?}"
+                    ));
+                }
+                return Err(e.into());
             }
-            continue;
         };
 
         if let Err(e) = handle_command(
