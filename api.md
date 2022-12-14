@@ -101,6 +101,23 @@ The fields of the main configuration object are as follows:
 - `estop_sequence` - array: A list of objects describing each sequential
   operation to be taken during the shutoff sequence.
 
+### Drivers
+
+Each driver is represented by an object in the `drivers` list. 
+It will have the following keys:
+
+- `label` - string: A human-readable name for the driver.
+
+- `pin` - int: The GPIO pin that the driver controls. 
+  Note that the GPIO pin is by software standards, and it is *not* the phyiscal pinout on the 
+  Raspberry Pi.
+
+- `protected` - bool: Whether the user of the dashboard can directly actuate this pin.
+  If `false`, the user can only read the state of this driver, and the only way the driver can be 
+  actuated is via an ignition or emergency stop sequence.
+  The ignition driver should always be protected.
+
+
 ### Sensors
 
 Each sensor group (each being an element of the `sensor_groups` field) is an

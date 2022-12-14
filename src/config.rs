@@ -59,6 +59,8 @@ pub struct Driver {
     pub label: String,
     /// The pin actuated by the driver.
     pub pin: u8,
+    /// Whether this driver is protected from user access.
+    pub protected: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -222,7 +224,8 @@ mod tests {
             "drivers": [
                 {
                     "label": "OXI_FILL",
-                    "pin": 33
+                    "pin": 33,
+                    "protected": false
                 }
             ],
             "ignition_sequence": [
@@ -297,6 +300,7 @@ mod tests {
             drivers: vec![Driver {
                 label: "OXI_FILL".into(),
                 pin: 33,
+                protected: false,
             }],
             ignition_sequence: vec![
                 Action::Actuate {
@@ -323,6 +327,6 @@ mod tests {
         };
 
         let mut cursor = Cursor::new(config_str);
-        assert!(Ok(config).eq(&Configuration::parse(&mut cursor)));
+        assert_eq!(&Ok(config), &Configuration::parse(&mut cursor));
     }
 }
