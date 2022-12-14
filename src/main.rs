@@ -204,7 +204,10 @@ fn main() -> Result<(), ControllerError> {
         let listener = TcpListener::bind(address)?;
         socket::setsockopt(listener.as_raw_fd(), ReusePort, &true).unwrap();
 
-        user_log.info(&format!("Opened TCP listener on address {address}"))?;
+        user_log.info(&format!(
+            "Opened TCP listener on address {}",
+            listener.local_addr()?
+        ))?;
         user_log.debug("Handling clients...")?;
 
         for mut from_dash in listener.incoming().flatten() {
