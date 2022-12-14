@@ -2,7 +2,7 @@ use std::{
     fs::{create_dir_all, File},
     io::{self, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
-    os::fd::AsRawFd,
+    os::unix::io::AsRawFd,
     path::{Path, PathBuf},
     sync::Mutex,
     time::Duration,
