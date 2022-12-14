@@ -97,27 +97,33 @@
     "drivers": [
         {
             "label": "FEED",
-            "pin": 17
+            "pin": 17,
+            "protected": false
         },
         {
             "label": "OXI_VENT",
-            "pin": 27
+            "pin": 27,
+            "protected": false
         },
         {
             "label": "GND_VENT",
-            "pin": 22
+            "pin": 22,
+            "protected": false
         },
         {
             "label": "UNUSED1",
-            "pin": 24
+            "pin": 24,
+            "protected": true
         },
         {
             "label": "UNUSED2",
-            "pin": 13
+            "pin": 13,
+            "protected": true
         },
         {
             "label": "IGN_START",
-            "pin": 12
+            "pin": 12,
+            "protected": true
         }
     ],
     "pre_ignite_time": 1000,
