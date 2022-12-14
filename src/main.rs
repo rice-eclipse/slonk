@@ -214,12 +214,11 @@ fn main() -> Result<(), ControllerError> {
             let mut from_dash = match client_res {
                 Ok(i) => i,
                 Err(e) => {
-                    user_log
-                        .warn(&format!("failed to collect incoming client: {}", e))
-                        .unwrap();
+                    user_log.warn(&format!("failed to collect incoming client: {}", e))?;
                     continue;
                 }
             };
+            user_log.info(&format!("Accepted client {:?}", from_dash.local_addr()?))?;
             to_dash
                 .lock()?
                 .set_channel(TcpStream::connect(from_dash.peer_addr()?)?);
