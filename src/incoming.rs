@@ -98,6 +98,7 @@ impl Command {
             escaped = c == b'\\' && !escaped;
         }
 
+        println!("{}", String::from_utf8_lossy(&buffer));
         let result = serde_json::from_slice(&buffer);
         let cmd = result
             .map_err(|_| ParseError::Malformed(String::from_utf8_lossy(&buffer).to_string()))?;
