@@ -10,7 +10,6 @@ use std::{
 
 use gpio_cdev::{Chip, LineRequestFlags};
 use nix::sys::socket::{self, sockopt::ReusePort};
-use serde_json::error::Category;
 use slonk::{
     config::Configuration,
     console::UserLog,
@@ -20,6 +19,7 @@ use slonk::{
         spi::{Bus, Device},
         GpioPin, Mcp3208,
     },
+    incoming::{Command, ParseError},
     outgoing::{DashChannel, Message},
     ControllerError, ControllerState, StateGuard,
 };
@@ -269,33 +269,30 @@ fn handle_client(
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
     to_dash.send(&Message::Config { config })?;
+    user_log.debug("Successfully sent configuration to dashboard.")?;
     loop {
         let Some(ref mut reader) = *from_dash.write()? else {
             user_log.info("Dashboard disconnected.")?;
             return Ok(());
         };
-        let cmd = match serde_json::from_reader(reader) {
+        let cmd = match Command::parse(reader) {
             Ok(cmd) => cmd,
             Err(e) => {
-                match e.classify() {
-                    Category::Io => {
-                        #[allow(unused_must_use)]
-                        {
-                            user_log.critical("I/O error when getting message from client.");
-                        }
-                    }
-                    Category::Syntax | Category::Data => {
-                        #[allow(unused_must_use)]
-                        {
-                            user_log.warn(&format!("Received malformed command: {e:?}"));
-                        }
-                    }
-                    Category::Eof => {
-                        user_log.info("Dashboard disconnected.")?;
+                match e {
+                    ParseError::SourceClosed => {
+                        user_log.info("Dashboard disconnected")?;
                         return Ok(());
                     }
-                };
-                return Err(e.into());
+                    ParseError::Malformed(s) => {
+                        user_log.warn(&format!("Received invalid command {}", s))?;
+                    }
+                    ParseError::Io(e) => {
+                        user_log.warn(&format!("encountered I/O error: {}", e))?;
+                        return Err(ControllerError::Io(e));
+                    }
+                    _ => todo!(),
+                }
+                continue;
             }
         };
 
