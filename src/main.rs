@@ -4,12 +4,13 @@ use std::{
     net::TcpListener,
     os::unix::io::AsRawFd,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
 use gpio_cdev::{Chip, LineRequestFlags};
 use nix::sys::socket::{self, sockopt::ReusePort};
+use serde_json::error::Category;
 use slonk::{
     config::Configuration,
     console::UserLog,
@@ -108,9 +109,9 @@ fn main() -> Result<(), ControllerError> {
 
     // when a client connects, the inner value of this mutex will be `Some` containing a TCP stream
     // to the dashboard
-    let to_dash = Mutex::new(DashChannel::new(file_create_new(PathBuf::from_iter([
+    let to_dash = DashChannel::new(file_create_new(PathBuf::from_iter([
         logs_path, "sent.csv",
-    ]))?));
+    ]))?);
     let to_dash_ref = &to_dash;
 
     let mut gpio_chip = match Chip::new("/dev/gpiochip0") {
@@ -212,14 +213,14 @@ fn main() -> Result<(), ControllerError> {
 
         for client_res in listener.incoming() {
             let stream = match client_res {
-                Ok(i) => Arc::new(Mutex::new(i)),
+                Ok(i) => i,
                 Err(e) => {
                     user_log.warn(&format!("failed to collect incoming client: {}", e))?;
                     continue;
                 }
             };
-            user_log.info(&format!("Accepted client {:?}", stream.lock()?.peer_addr()))?;
-            to_dash.lock()?.set_channel(Arc::clone(&stream));
+            user_log.info(&format!("Accepted client {:?}", stream.peer_addr()))?;
+            to_dash.set_channel(Some(stream))?;
 
             user_log.debug("Overwrote to dashboard lock, now reading commands")?;
 
@@ -228,13 +229,13 @@ fn main() -> Result<(), ControllerError> {
                 // keep the port open even in error cases
                 handle_client(
                     to_dash_ref,
-                    &stream,
+                    &to_dash_ref.dash_channel,
                     config_ref,
                     driver_lines_ref,
                     cmd_file_ref,
                     user_log_ref,
                     state_ref,
-                );
+                )?;
             }
         }
 
@@ -259,25 +260,41 @@ fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
 
 /// Handle a single dashboard client.
 fn handle_client(
-    to_dash: &Mutex<DashChannel<impl Write, impl Write>>,
-    from_dash: &Arc<Mutex<impl Read>>,
+    to_dash: &DashChannel<impl Write, impl Write>,
+    from_dash: &Arc<RwLock<Option<impl Read>>>,
     config: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
     cmd_log_file: &mut impl Write,
     user_log: &UserLog<impl Write>,
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
-    to_dash.lock()?.send(&Message::Config { config })?;
+    to_dash.send(&Message::Config { config })?;
     loop {
-        let cmd = match serde_json::from_reader(&mut *from_dash.lock()?) {
+        let Some(ref mut reader) = *from_dash.write()? else {
+            user_log.info("Dashboard disconnected.")?;
+            return Ok(());
+        };
+        let cmd = match serde_json::from_reader(reader) {
             Ok(cmd) => cmd,
             Err(e) => {
-                #[allow(unused_must_use)]
-                {
-                    user_log.warn(&format!(
-                        "Could not parse message from dashboard - likely closed connection. {e:?}"
-                    ));
-                }
+                match e.classify() {
+                    Category::Io => {
+                        #[allow(unused_must_use)]
+                        {
+                            user_log.critical("I/O error when getting message from client.");
+                        }
+                    }
+                    Category::Syntax | Category::Data => {
+                        #[allow(unused_must_use)]
+                        {
+                            user_log.warn(&format!("Received malformed command: {e:?}"));
+                        }
+                    }
+                    Category::Eof => {
+                        user_log.info("Dashboard disconnected.")?;
+                        return Ok(());
+                    }
+                };
                 return Err(e.into());
             }
         };

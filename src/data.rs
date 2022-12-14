@@ -57,7 +57,7 @@ pub fn sensor_listen<'a>(
     user_log: &UserLog<impl Write>,
     adcs: &[Mutex<impl Adc>],
     state: &'a StateGuard,
-    dashboard_stream: &'a Mutex<DashChannel<impl Write, impl Write>>,
+    dashboard_stream: &'a DashChannel<impl Write, impl Write>,
 ) -> Result<(), ControllerError> {
     assert!(usize::from(group_id) < configuration.sensor_groups.len());
 
@@ -145,10 +145,9 @@ pub fn sensor_listen<'a>(
 
         // transmit data to the dashboard if it's been long enough since our last transmission
         if SystemTime::now() > last_transmission_time + transmission_period {
-            let mut channel_guard = dashboard_stream.lock()?;
-            if channel_guard.has_target() {
+            if dashboard_stream.has_target()? {
                 // send message to dashboard
-                let send_result = channel_guard.send(&Message::SensorValue {
+                let send_result = dashboard_stream.send(&Message::SensorValue {
                     group_id,
                     readings: &transmission_readings
                         .iter()
@@ -237,7 +236,7 @@ pub fn driver_status_listen(
     log_file: &mut impl Write,
     user_log: &UserLog<impl Write>,
     state: &StateGuard,
-    dashboard_stream: &Mutex<DashChannel<impl Write, impl Write>>,
+    dashboard_stream: &DashChannel<impl Write, impl Write>,
 ) -> Result<(), ControllerError> {
     // the time required to sleep
     let sleep_time = Duration::from_secs(1) / configuration.frequency_status;
@@ -278,7 +277,7 @@ pub fn driver_status_listen(
         }
 
         // optionally transmit to dashboard
-        dashboard_stream.lock()?.send(&Message::DriverValue {
+        dashboard_stream.send(&Message::DriverValue {
             values: &driver_states,
         })?;
 
@@ -369,7 +368,7 @@ fn write_sensor_log<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor, sync::Arc, thread::scope};
+    use std::{io::Cursor, thread::scope};
 
     use serde_json::Value;
 
@@ -442,13 +441,10 @@ mod tests {
         let mut output_log = Vec::new();
         // stream of outgoing messages
         let mut output_stream_buf = Vec::new();
-        let output_stream = Mutex::new(DashChannel::<&mut Vec<u8>, &mut Vec<u8>>::new(
-            &mut output_log,
-        ));
+        let output_stream = DashChannel::<&mut Vec<u8>, &mut Vec<u8>>::new(&mut output_log);
         output_stream
-            .lock()
-            .unwrap()
-            .set_channel(Arc::new(Mutex::new(&mut output_stream_buf)));
+            .set_channel(Some(&mut output_stream_buf))
+            .unwrap();
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here
@@ -584,7 +580,7 @@ mod tests {
 
         let state = StateGuard::new(ControllerState::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
-        let output_stream = Mutex::new(DashChannel::<Vec<u8>, Vec<u8>>::new(Vec::new()));
+        let output_stream = DashChannel::<Vec<u8>, Vec<u8>>::new(Vec::new());
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here
