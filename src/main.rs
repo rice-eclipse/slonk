@@ -19,7 +19,7 @@ use slonk::{
         spi::{Bus, Device},
         GpioPin, Mcp3208,
     },
-    outgoing::DashChannel,
+    outgoing::{DashChannel, Message},
     ControllerError, ControllerState, StateGuard,
 };
 
@@ -222,14 +222,20 @@ fn main() -> Result<(), ControllerError> {
             to_dash.lock()?.set_channel(Arc::clone(&stream));
 
             user_log.debug("Overwrote to dashboard lock, now reading commands")?;
-            handle_client(
-                &stream,
-                config_ref,
-                driver_lines_ref,
-                cmd_file_ref,
-                user_log_ref,
-                state_ref,
-            )?;
+
+            #[allow(unused_must_use)]
+            {
+                // keep the port open even in error cases
+                handle_client(
+                    to_dash_ref,
+                    &stream,
+                    config_ref,
+                    driver_lines_ref,
+                    cmd_file_ref,
+                    user_log_ref,
+                    state_ref,
+                );
+            }
         }
 
         Ok::<(), ControllerError>(())
@@ -253,6 +259,7 @@ fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
 
 /// Handle a single dashboard client.
 fn handle_client(
+    to_dash: &Mutex<DashChannel<impl Write, impl Write>>,
     from_dash: &Arc<Mutex<impl Read>>,
     config: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
@@ -260,6 +267,7 @@ fn handle_client(
     user_log: &UserLog<impl Write>,
     state_ref: &StateGuard,
 ) -> Result<(), ControllerError> {
+    to_dash.lock()?.send(&Message::Config { config })?;
     loop {
         let cmd = match serde_json::from_reader(&mut *from_dash.lock()?) {
             Ok(cmd) => cmd,
