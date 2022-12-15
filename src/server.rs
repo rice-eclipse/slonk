@@ -77,6 +77,7 @@ pub trait MakeHardware {
     ) -> Result<Vec<Self::Pin>, ControllerError>;
 }
 
+/// A hardware maker for actually interfacing with the Raspberry Pi.
 pub struct RaspberryPi;
 
 impl MakeHardware for RaspberryPi {
@@ -112,16 +113,17 @@ impl MakeHardware for RaspberryPi {
         config: &Configuration,
         chip: &mut Self::Chip,
     ) -> Result<Vec<Self::Pin>, ControllerError> {
-        Ok(config
-            .drivers
-            .iter()
-            .map(|driver| {
-                chip.get_line(u32::from(driver.pin))
-                    .unwrap()
-                    .request(LineRequestFlags::OUTPUT, 0, "slonk")
-                    .unwrap()
-            })
-            .collect())
+        let mut lines = Vec::new();
+
+        for driver in &config.drivers {
+            lines.push(chip.get_line(u32::from(driver.pin))?.request(
+                LineRequestFlags::OUTPUT,
+                0,
+                "slonk",
+            )?);
+        }
+
+        Ok(lines)
     }
 
     fn bus(config: &Configuration, chip: &mut Self::Chip) -> Result<Self::Bus, ControllerError> {
@@ -146,6 +148,7 @@ impl MakeHardware for RaspberryPi {
     }
 }
 
+/// A dummy hardware maker for testing on any Linux computer.
 pub struct Dummy;
 
 impl MakeHardware for Dummy {

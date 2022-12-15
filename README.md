@@ -46,6 +46,19 @@ sudo ./target/release/slonk config/titan.json ../slogs/my_test_logs
 
 To run all tests, run `cargo test`.
 
+## Test binary
+
+The main `slonk` binary can only be run as root on a Raspberry Pi. 
+To make testing easier, we also provide a test binary that can be run as a non-privileged user on 
+any Linux computer.
+To run it, first build with `cargo build --release` and then run `./target/release/dummy`.
+It takes the same arguments as the main controller executable.
+
+```sh
+cargo build --release
+sudo .target/release/dummy config/titan.json ../slogs/my_dummy_slogs
+```
+
 ## Standard Git Procedures
 
 To reduce chances of version control blunders, we've created standard git procedures.
