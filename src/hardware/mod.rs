@@ -56,6 +56,9 @@ pub struct Mcp3208<'a, P: GpioPin> {
     device: spi::Device<'a, P>,
 }
 
+/// Dummy ADC structure for testing.
+pub struct ReturnsNumber(pub u16);
+
 /// A structure for testing GPIO writes.
 ///
 /// A `ListenerPin` stores the history of all writes to it.
@@ -163,6 +166,12 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
 
         // the back two bytes of `incoming` now have our data in big endian representation.
         Ok(u16::from_be_bytes([incoming[1], incoming[2]]))
+    }
+}
+
+impl Adc for ReturnsNumber {
+    fn read(&mut self, _: u8) -> Result<u16, crate::ControllerError> {
+        Ok(self.0)
     }
 }
 

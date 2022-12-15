@@ -2,40 +2,202 @@ use std::{
     fs::{create_dir_all, File},
     io::{self, BufReader, Read, Write},
     net::TcpListener,
-    os::unix::io::AsRawFd,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, RwLock},
+    sync::Mutex,
     time::Duration,
 };
 
-use gpio_cdev::{Chip, LineRequestFlags};
-use nix::sys::socket::{self, sockopt::ReusePort};
-use slonk::{
+use gpio_cdev::{Chip, LineHandle, LineRequestFlags};
+
+use crate::{
     config::Configuration,
     console::UserLog,
     data::{driver_status_listen, sensor_listen},
     execution::handle_command,
     hardware::{
         spi::{Bus, Device},
-        GpioPin, Mcp3208,
+        Adc, GpioPin, ListenerPin, Mcp3208, ReturnsNumber,
     },
     incoming::{Command, ParseError},
     outgoing::{DashChannel, Message},
     ControllerError, ControllerState, StateGuard,
 };
 
-/// The main function for the `slonk` controller.
+/// A trait for functions which can create the necessary hardware for the server to run.
 ///
-/// # Arguments
+/// This exists to allow us to "spoof" hardware for the main process so we don't have to test
+/// everything on real hardware.
+pub trait MakeHardware {
+    /// The type of the chip, which can be used for getting a GPIO pin.
+    type Chip;
+    /// The type of GPIO pin that this trait can make.
+    type Pin: GpioPin + Send + Sync;
+    /// The internal bus type.
+    type Bus;
+    /// The type of ADC reader that this trait can make.
+    type Reader<'a>: Adc + Send + Sync;
+
+    /// Construct a GPIO chip which can be used to get pins.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if constructing the chip fails.
+    fn chip() -> Result<Self::Chip, ControllerError>;
+
+    /// Construct a bus for use by the readers based on information from the configuration.
+    ///
+    /// # Errors
+    ///
+    /// This function wil lreturn an error if acquiring the pins for the bus fails.
+    fn bus(config: &Configuration, chip: &mut Self::Chip) -> Result<Self::Bus, ControllerError>;
+
+    #[allow(clippy::type_complexity)]
+    /// Construct the ADCs using information from the configuration.
+    ///
+    /// The length of the vector of `Self::Reader` returned must be equal to the length of `adc_cs`
+    /// in the configuration.
+    ///
+    /// # Errors
+    ///
+    /// This function may return an error if it is unable to acquire the GPIO needed.
+    fn adcs<'a>(
+        config: &Configuration,
+        chip: &mut Self::Chip,
+        bus: &'a Self::Bus,
+    ) -> Result<Vec<Mutex<Self::Reader<'a>>>, ControllerError>;
+
+    /// Construct the drivers using information from the configuration.
+    ///
+    /// # Errors
+    ///
+    /// This function may return an error if it is unable to acquire the GPIO needed.
+    fn drivers(
+        config: &Configuration,
+        chip: &mut Self::Chip,
+    ) -> Result<Vec<Self::Pin>, ControllerError>;
+}
+
+pub struct RaspberryPi;
+
+impl MakeHardware for RaspberryPi {
+    type Chip = Chip;
+    type Pin = LineHandle;
+
+    type Bus = Mutex<Bus<Self::Pin>>;
+
+    type Reader<'a> = Mcp3208<'a, Self::Pin>;
+
+    fn chip() -> Result<Self::Chip, ControllerError> {
+        Ok(Chip::new("/dev/gpiochip0")?)
+    }
+
+    fn adcs<'a>(
+        config: &Configuration,
+        chip: &mut Self::Chip,
+        bus: &'a Self::Bus,
+    ) -> Result<Vec<Mutex<Self::Reader<'a>>>, ControllerError> {
+        let mut adcs = Vec::new();
+        for &cs_pin in &config.adc_cs {
+            adcs.push(Mutex::new(Mcp3208::new(Device::new(
+                bus,
+                chip.get_line(u32::from(cs_pin))?
+                    .request(LineRequestFlags::OUTPUT, 1, "slonk")?,
+            ))));
+        }
+
+        Ok(adcs)
+    }
+
+    fn drivers(
+        config: &Configuration,
+        chip: &mut Self::Chip,
+    ) -> Result<Vec<Self::Pin>, ControllerError> {
+        Ok(config
+            .drivers
+            .iter()
+            .map(|driver| {
+                chip.get_line(u32::from(driver.pin))
+                    .unwrap()
+                    .request(LineRequestFlags::OUTPUT, 0, "slonk")
+                    .unwrap()
+            })
+            .collect())
+    }
+
+    fn bus(config: &Configuration, chip: &mut Self::Chip) -> Result<Self::Bus, ControllerError> {
+        Ok(Mutex::new(Bus {
+            period: Duration::from_secs(1) / config.spi_frequency_clk,
+            pin_clk: chip.get_line(u32::from(config.spi_clk))?.request(
+                LineRequestFlags::OUTPUT,
+                0,
+                "slonk",
+            )?,
+            pin_mosi: chip.get_line(u32::from(config.spi_mosi))?.request(
+                LineRequestFlags::OUTPUT,
+                0,
+                "slonk",
+            )?,
+            pin_miso: chip.get_line(u32::from(config.spi_miso))?.request(
+                LineRequestFlags::INPUT,
+                0,
+                "slonk",
+            )?,
+        }))
+    }
+}
+
+pub struct Dummy;
+
+impl MakeHardware for Dummy {
+    type Chip = ();
+    type Pin = ListenerPin;
+
+    type Reader<'a> = ReturnsNumber;
+
+    type Bus = ();
+
+    fn chip() -> Result<(), ControllerError> {
+        Ok(())
+    }
+
+    fn bus(_: &Configuration, _: &mut Self::Chip) -> Result<Self::Bus, ControllerError> {
+        Ok(())
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn adcs<'a>(
+        config: &Configuration,
+        _: &mut Self::Chip,
+        _: &'a Self::Bus,
+    ) -> Result<Vec<Mutex<Self::Reader<'a>>>, ControllerError> {
+        Ok((0..config.adc_cs.len())
+            .map(|i| Mutex::new(ReturnsNumber(i as u16)))
+            .collect())
+    }
+
+    fn drivers(
+        config: &Configuration,
+        _: &mut Self::Chip,
+    ) -> Result<Vec<Self::Pin>, ControllerError> {
+        Ok((0..config.drivers.len())
+            .map(|_| ListenerPin::new(false))
+            .collect())
+    }
+}
+
+#[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
+/// The primary run function for the `slonk` server.
 ///
-/// The first argument to this executable (via `std::env::args`) is the path to a configuration JSON
-/// file, formatted according to the specification in `api.md`.
+/// `M` is a dependency-injector for creating hardware.
 ///
-/// The second argument to this executable is a path to a directory where log files should be
-/// created.
-/// If the directory does not exist, it will be created.
-fn main() -> Result<(), ControllerError> {
-    println!("=== slonk by Rice Eclipse ===");
+/// # Errors
+///
+/// This function can return any of the possible errors in `ControllerError`.
+///
+/// # Panics
+///
+/// This function may panic if it is unable to correctly set up the controller.
+pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Use arguments to get configuration file
     let json_path = args
@@ -101,12 +263,6 @@ fn main() -> Result<(), ControllerError> {
     let mut drivers_file = file_create_new(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
     let drivers_file_ref = &mut drivers_file;
 
-    user_log.debug("Successfully created log files")?;
-    user_log.debug("Now acquiring GPIO")?;
-
-    let state = StateGuard::new(ControllerState::Standby);
-    let state_ref = &state;
-
     // when a client connects, the inner value of this mutex will be `Some` containing a TCP stream
     // to the dashboard
     let to_dash = DashChannel::new(file_create_new(PathBuf::from_iter([
@@ -114,56 +270,19 @@ fn main() -> Result<(), ControllerError> {
     ]))?);
     let to_dash_ref = &to_dash;
 
-    let mut gpio_chip = match Chip::new("/dev/gpiochip0") {
-        Ok(c) => c,
-        Err(e) => {
-            user_log.critical(&format!("Failed to acquire GPIO chip: {}", e))?;
-            return Err(e.into());
-        }
-    };
-    let bus = Mutex::new(Bus {
-        period: Duration::from_secs(1) / config.spi_frequency_clk,
-        pin_clk: gpio_chip.get_line(config.spi_clk as u32)?.request(
-            LineRequestFlags::OUTPUT,
-            0,
-            "slonk",
-        )?,
-        pin_mosi: gpio_chip.get_line(config.spi_mosi as u32)?.request(
-            LineRequestFlags::OUTPUT,
-            0,
-            "slonk",
-        )?,
-        pin_miso: gpio_chip.get_line(config.spi_miso as u32)?.request(
-            LineRequestFlags::INPUT,
-            0,
-            "slonk",
-        )?,
-    });
+    user_log.debug("Successfully created log files")?;
 
-    let mut adcs = Vec::new();
-    for &cs_pin in &config.adc_cs {
-        adcs.push(Mutex::new(Mcp3208::new(Device::new(
-            &bus,
-            gpio_chip
-                .get_line(u32::from(cs_pin))?
-                .request(LineRequestFlags::OUTPUT, 1, "slonk")?,
-        ))));
-    }
+    let state = StateGuard::new(ControllerState::Standby);
+    let state_ref = &state;
+
+    user_log.debug("Now acquiring GPIO")?;
+
+    let mut gpio_chip = M::chip()?;
+    let bus = M::bus(&config, &mut gpio_chip)?;
+    let adcs = M::adcs(&config, &mut gpio_chip, &bus)?;
     let adcs_ref = &adcs;
 
-    let driver_lines = Mutex::new(
-        config
-            .drivers
-            .iter()
-            .map(|driver| {
-                gpio_chip
-                    .get_line(u32::from(driver.pin))
-                    .unwrap()
-                    .request(LineRequestFlags::OUTPUT, 0, "slonk")
-                    .unwrap()
-            })
-            .collect(),
-    );
+    let driver_lines = Mutex::new(M::drivers(&config, &mut gpio_chip)?);
     let driver_lines_ref = &driver_lines;
 
     user_log.debug("Successfully acquired GPIO handles")?;
@@ -203,7 +322,6 @@ fn main() -> Result<(), ControllerError> {
         // TODO: maybe configure this IP number?
         let address = "0.0.0.0:2707";
         let listener = TcpListener::bind(address)?;
-        socket::setsockopt(listener.as_raw_fd(), ReusePort, &true).unwrap();
 
         user_log.info(&format!(
             "Opened TCP listener on address {}",
@@ -212,7 +330,7 @@ fn main() -> Result<(), ControllerError> {
         user_log.debug("Handling clients...")?;
 
         for client_res in listener.incoming() {
-            let stream = match client_res {
+            let mut stream = match client_res {
                 Ok(i) => i,
                 Err(e) => {
                     user_log.warn(&format!("failed to collect incoming client: {}", e))?;
@@ -220,7 +338,7 @@ fn main() -> Result<(), ControllerError> {
                 }
             };
             user_log.info(&format!("Accepted client {:?}", stream.peer_addr()))?;
-            to_dash.set_channel(Some(stream))?;
+            to_dash.set_channel(Some(stream.try_clone()?))?;
 
             user_log.debug("Overwrote to dashboard lock, now reading commands")?;
 
@@ -229,7 +347,7 @@ fn main() -> Result<(), ControllerError> {
                 // keep the port open even in error cases
                 handle_client(
                     to_dash_ref,
-                    &to_dash_ref.dash_channel,
+                    &mut stream,
                     config_ref,
                     driver_lines_ref,
                     cmd_file_ref,
@@ -261,7 +379,7 @@ fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
 /// Handle a single dashboard client.
 fn handle_client(
     to_dash: &DashChannel<impl Write, impl Write>,
-    from_dash: &Arc<RwLock<Option<impl Read>>>,
+    from_dash: &mut impl Read,
     config: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
     cmd_log_file: &mut impl Write,
@@ -271,11 +389,7 @@ fn handle_client(
     to_dash.send(&Message::Config { config })?;
     user_log.debug("Successfully sent configuration to dashboard.")?;
     loop {
-        let Some(ref mut reader) = *from_dash.write()? else {
-            user_log.info("Dashboard disconnected.")?;
-            return Ok(());
-        };
-        let cmd = match Command::parse(reader) {
+        let cmd = match Command::parse(from_dash) {
             Ok(cmd) => cmd,
             Err(e) => {
                 match e {
@@ -290,7 +404,6 @@ fn handle_client(
                         user_log.warn(&format!("encountered I/O error: {}", e))?;
                         return Err(ControllerError::Io(e));
                     }
-                    _ => todo!(),
                 }
                 continue;
             }

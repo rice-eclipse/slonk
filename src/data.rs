@@ -281,6 +281,8 @@ pub fn driver_status_listen(
             values: &driver_states,
         })?;
 
+        drop(drivers_guard); // don't keep the drivers guard!!
+
         // take a nap until we are ready to send another message
         sleep(sleep_time);
     }
@@ -372,18 +374,9 @@ mod tests {
 
     use serde_json::Value;
 
-    use crate::hardware::ListenerPin;
+    use crate::hardware::{ListenerPin, ReturnsNumber};
 
     use super::*;
-
-    /// Dummy ADC structure for testing.
-    struct ReturnsNumber(u16);
-
-    impl Adc for ReturnsNumber {
-        fn read(&mut self, _: u8) -> Result<u16, crate::ControllerError> {
-            Ok(self.0)
-        }
-    }
 
     #[test]
     #[allow(clippy::too_many_lines)]

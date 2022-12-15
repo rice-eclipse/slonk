@@ -57,9 +57,7 @@ pub fn handle_command(
 
     match cmd {
         Command::Actuate { driver_id, value } => {
-            println!("actuating...");
             actuate_driver(driver_lines.lock()?.as_mut(), *driver_id, *value)?;
-            println!("done");
         }
         Command::Ignition => ignition(configuration, driver_lines.lock()?.as_mut(), state)?,
         Command::EmergencyStop => {
