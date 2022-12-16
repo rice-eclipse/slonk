@@ -101,7 +101,7 @@
             "protected": false
         },
         {
-            "label": "Oxidizer tank vent",
+            "label": "Ox tank vent",
             "pin": 27,
             "protected": false
         },
