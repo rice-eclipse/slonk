@@ -4,6 +4,7 @@ use std::{
     net::TcpListener,
     path::{Path, PathBuf},
     sync::Mutex,
+    thread::Scope,
     time::Duration,
 };
 
@@ -260,8 +261,11 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     }
 
     // create log file for commands that have been executed
-    let mut cmd_file = file_create_new(PathBuf::from_iter([logs_path, "commands.csv"]))?;
-    let cmd_file_ref = &mut cmd_file;
+    let cmd_file = Mutex::new(file_create_new(PathBuf::from_iter([
+        logs_path,
+        "commands.csv",
+    ]))?);
+    let cmd_file_ref = &cmd_file;
 
     let mut drivers_file = file_create_new(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
     let drivers_file_ref = &mut drivers_file;
@@ -340,7 +344,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
                     continue;
                 }
             };
-            user_log.info(&format!("Accepted client {:?}", stream.peer_addr()))?;
+            user_log.info(&format!("Accepted client {:?}", stream.peer_addr()?))?;
             to_dash.set_channel(Some(stream.try_clone()?))?;
 
             user_log.debug("Overwrote to dashboard lock, now reading commands")?;
@@ -349,6 +353,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
             {
                 // keep the port open even in error cases
                 handle_client(
+                    s,
                     to_dash_ref,
                     &mut stream,
                     config_ref,
@@ -379,15 +384,17 @@ fn file_create_new(p: impl AsRef<Path>) -> io::Result<File> {
         .open(p)
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Handle a single dashboard client.
-fn handle_client(
-    to_dash: &DashChannel<impl Write, impl Write>,
+fn handle_client<'a>(
+    thread_scope: &'a Scope<'a, '_>,
+    to_dash: &DashChannel<impl Write + Send, impl Write + Send>,
     from_dash: &mut impl Read,
-    config: &Configuration,
-    driver_lines: &Mutex<Vec<impl GpioPin>>,
-    cmd_log_file: &mut impl Write,
-    user_log: &UserLog<impl Write>,
-    state_ref: &StateGuard,
+    config: &'a Configuration,
+    driver_lines: &'a Mutex<Vec<impl GpioPin + Send>>,
+    cmd_log_file: &'a Mutex<impl Write + Send>,
+    user_log: &'a UserLog<impl Write + Send>,
+    state: &'a StateGuard,
 ) -> Result<(), ControllerError> {
     to_dash.send(&Message::Config { config })?;
     user_log.debug("Successfully sent configuration to dashboard.")?;
@@ -412,17 +419,21 @@ fn handle_client(
             }
         };
 
-        if let Err(e) = handle_command(
-            &cmd,
-            cmd_log_file,
-            user_log,
-            config,
-            driver_lines,
-            state_ref,
+        if matches!(
+            cmd,
+            Command::Actuate {
+                driver_id: _,
+                value: _,
+            }
         ) {
-            user_log.critical(&format!("encountered error while executing commend: {e:?}"))?;
+            handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)?;
         } else {
-            user_log.debug("Finished executing command.")?;
+            // spawn thread to handle command
+            thread_scope.spawn(move || {
+                handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)
+            });
         }
+
+        user_log.debug("Finished executing command.")?;
     }
 }

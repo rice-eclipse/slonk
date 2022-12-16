@@ -35,7 +35,7 @@ use std::{
 /// This function will panic if the current system time is before the UNIX epoch.
 pub fn handle_command(
     cmd: &Command,
-    log_file: &mut impl Write,
+    log_file: &Mutex<impl Write>,
     user_log: &UserLog<impl Write>,
     configuration: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
@@ -51,7 +51,7 @@ pub fn handle_command(
     }
 
     #[allow(unused_must_use)]
-    if let Err(e) = writeln!(log_file, "{},request,{cmd}", time.as_nanos()) {
+    if let Err(e) = writeln!(log_file.lock()?, "{},request,{cmd}", time.as_nanos()) {
         user_log.warn(&format!("Unable to log command {cmd} to log file: {e:?}"));
     }
 
@@ -59,9 +59,9 @@ pub fn handle_command(
         Command::Actuate { driver_id, value } => {
             actuate_driver(driver_lines.lock()?.as_mut(), *driver_id, *value)?;
         }
-        Command::Ignition => ignition(configuration, driver_lines.lock()?.as_mut(), state)?,
+        Command::Ignition => ignition(configuration, driver_lines, state)?,
         Command::EmergencyStop => {
-            emergency_stop(configuration, driver_lines.lock()?.as_mut(), state)?;
+            emergency_stop(configuration, driver_lines, state)?;
         }
     };
 
@@ -70,7 +70,7 @@ pub fn handle_command(
         .unwrap();
 
     #[allow(unused_must_use)]
-    if let Err(e) = writeln!(log_file, "{},finish,{cmd}", time.as_nanos()) {
+    if let Err(e) = writeln!(log_file.lock()?, "{},finish,{cmd}", time.as_nanos()) {
         user_log.warn(&format!(
             "Unable to log completion of command {cmd} to log file: {e:?}"
         ));
@@ -89,7 +89,7 @@ pub fn handle_command(
 /// * We failed to gain control over GPIO.
 pub fn emergency_stop(
     configuration: &Configuration,
-    driver_lines: &mut [impl GpioPin],
+    driver_lines: &Mutex<Vec<impl GpioPin>>,
     state: &StateGuard,
 ) -> Result<(), ControllerError> {
     // transition to EStop, and if it's already in EStopping, don't interfere
@@ -114,7 +114,7 @@ pub fn emergency_stop(
 /// * We failed to gain control over GPIO.
 fn ignition(
     configuration: &Configuration,
-    driver_lines: &mut [impl GpioPin],
+    driver_lines: &Mutex<Vec<impl GpioPin>>,
     state: &StateGuard,
 ) -> Result<(), ControllerError> {
     state.move_to(ControllerState::PreIgnite)?;
@@ -168,13 +168,13 @@ fn actuate_driver(
 ///
 /// This function will return an error if we are unable to write to GPIO.
 fn perform_actions(
-    driver_lines: &mut [impl GpioPin],
+    driver_lines: &Mutex<Vec<impl GpioPin>>,
     actions: &[Action],
 ) -> Result<(), ControllerError> {
     for action in actions {
         match action {
             Action::Actuate { driver_id, value } => {
-                driver_lines[*driver_id as usize].write(*value)?;
+                driver_lines.lock()?[*driver_id as usize].write(*value)?;
             }
             Action::Sleep { duration } => sleep(*duration),
         };
@@ -221,13 +221,13 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
 
-        let mut driver_lines: [ListenerPin; 0] = [];
+        let driver_lines: Mutex<Vec<ListenerPin>> = Mutex::new(Vec::new());
 
         let state = StateGuard::new(ControllerState::Standby);
         let state_ref = &state;
 
         scope(|s| {
-            s.spawn(move || ignition(&config, &mut driver_lines, state_ref).unwrap());
+            s.spawn(move || ignition(&config, &driver_lines, state_ref).unwrap());
 
             sleep(Duration::from_millis(250));
             assert_eq!(state.status().unwrap(), ControllerState::PreIgnite);
@@ -275,12 +275,15 @@ mod tests {
 
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
-        let mut driver_lines = [ListenerPin::new(false)];
+        let driver_lines = Mutex::new(vec![ListenerPin::new(false)]);
         let state = StateGuard::new(ControllerState::Standby);
 
-        ignition(&config, &mut driver_lines, &state).unwrap();
+        ignition(&config, &driver_lines, &state).unwrap();
 
-        assert_eq!(driver_lines[0].history().as_slice(), [false, true, false]);
+        assert_eq!(
+            driver_lines.lock().unwrap()[0].history().as_slice(),
+            [false, true, false]
+        );
     }
 
     #[test]
@@ -313,13 +316,13 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
 
-        let mut driver_lines: [ListenerPin; 0] = [];
+        let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         let state = StateGuard::new(ControllerState::Standby);
         let state_ref = &state;
 
         scope(|s| {
-            s.spawn(move || emergency_stop(&config, &mut driver_lines, state_ref).unwrap());
+            s.spawn(move || emergency_stop(&config, &driver_lines, state_ref).unwrap());
 
             sleep(Duration::from_millis(250));
             assert_eq!(state.status().unwrap(), ControllerState::EStopping);
@@ -361,11 +364,14 @@ mod tests {
 
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
-        let mut driver_lines = [ListenerPin::new(false)];
+        let driver_lines = Mutex::new(vec![ListenerPin::new(false)]);
         let state = StateGuard::new(ControllerState::Standby);
 
-        emergency_stop(&config, &mut driver_lines, &state).unwrap();
+        emergency_stop(&config, &driver_lines, &state).unwrap();
 
-        assert_eq!(driver_lines[0].history().as_slice(), [false, true, false]);
+        assert_eq!(
+            driver_lines.lock().unwrap()[0].history().as_slice(),
+            [false, true, false]
+        );
     }
 }

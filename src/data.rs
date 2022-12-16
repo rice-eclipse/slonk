@@ -135,9 +135,7 @@ pub fn sensor_listen<'a>(
                     // this may return an error due to illegal transistion, but that is not our
                     // problem.
                     thread_scope.spawn(|| {
-                        if let Ok(mut drivers_guard) = driver_lines.lock() {
-                            emergency_stop(configuration, drivers_guard.as_mut(), state);
-                        }
+                        emergency_stop(configuration, driver_lines, state);
                     });
                 }
             }
