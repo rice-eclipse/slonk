@@ -4,9 +4,9 @@
     "sensor_groups": [
         {
             "label": "TC",
-            "frequency_standby": 10,
+            "frequency_standby": 5,
             "frequency_ignition": 20,
-            "frequency_transmission": 10,
+            "frequency_transmission": 5,
             "sensors": [
                 {
                     "label": "TC1_OXI",
@@ -30,9 +30,9 @@
         },
         {
             "label": "PT",
-            "frequency_standby": 10,
+            "frequency_standby": 5,
             "frequency_ignition": 500,
-            "frequency_transmission": 50,
+            "frequency_transmission": 5,
             "sensors": [
                 {
                     "label": "PT1_COMB",
@@ -78,9 +78,9 @@
         },
         {
             "label": "LC",
-            "frequency_standby": 10,
+            "frequency_standby": 5,
             "frequency_ignition": 2000,
-            "frequency_transmission": 50,
+            "frequency_transmission": 5,
             "sensors": [
                 {
                     "label": "LC_MAIN",

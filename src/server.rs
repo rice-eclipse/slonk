@@ -356,7 +356,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
                     cmd_file_ref,
                     user_log_ref,
                     state_ref,
-                )?;
+                );
             }
         }
 
