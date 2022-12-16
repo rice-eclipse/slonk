@@ -3,13 +3,13 @@
     "log_buffer_size": 256,
     "sensor_groups": [
         {
-            "label": "TC",
+            "label": "Thermocouples",
             "frequency_standby": 5,
             "frequency_ignition": 20,
             "frequency_transmission": 5,
             "sensors": [
                 {
-                    "label": "TC1_OXI",
+                    "label": "TC1: Oxidizer tank",
                     "color": "#FC6453",
                     "units": "°C",
                     "calibration_intercept": 300,
@@ -18,7 +18,7 @@
                     "channel": 0
                 },
                 {
-                    "label": "TC2_COMB",
+                    "label": "TC2: Combustion chamber",
                     "color": "#EF3B9E",
                     "units": "°C",
                     "calibration_intercept": -250,
@@ -29,13 +29,13 @@
             ]
         },
         {
-            "label": "PT",
+            "label": "Pressure Transducers",
             "frequency_standby": 5,
             "frequency_ignition": 500,
             "frequency_transmission": 5,
             "sensors": [
                 {
-                    "label": "PT1_COMB",
+                    "label": "PT1: Combustion chamber",
                     "units": "psi",
                     "color": "#EBF927",
                     "calibration_intercept": -270,
@@ -45,7 +45,7 @@
                     "channel": 0
                 },
                 {
-                    "label": "PT2_FEED",
+                    "label": "PT2: Oxidizer feedline",
                     "units": "psi",
                     "color": "#1D8718",
                     "calibration_intercept": 1027,
@@ -55,7 +55,7 @@
                     "channel": 1
                 },
                 {
-                    "label": "PT3_INJE",
+                    "label": "PT3: Injector",
                     "units": "psi",
                     "color": "#4104D1",
                     "calibration_intercept": 1548,
@@ -65,7 +65,7 @@
                     "channel": 2
                 },
                 {
-                    "label": "PT4_OXI",
+                    "label": "PT4: Oxidizer tank",
                     "color": "#F9864D",
                     "units": "psi",
                     "calibration_intercept": 1382,
@@ -77,13 +77,13 @@
             ]
         },
         {
-            "label": "LC",
+            "label": "Load Cells",
             "frequency_standby": 5,
             "frequency_ignition": 2000,
             "frequency_transmission": 5,
             "sensors": [
                 {
-                    "label": "LC_MAIN",
+                    "label": "Main axial cell",
                     "color": "#3292FF",
                     "units": "lb",
                     "calibration_intercept": 0.34,
@@ -96,32 +96,32 @@
     ],
     "drivers": [
         {
-            "label": "FEED",
+            "label": "Feedline",
             "pin": 17,
             "protected": false
         },
         {
-            "label": "OXI_VENT",
+            "label": "Oxidizer tank vent",
             "pin": 27,
             "protected": false
         },
         {
-            "label": "GND_VENT",
+            "label": "Ground vent",
             "pin": 22,
             "protected": false
         },
         {
-            "label": "UNUSED1",
+            "label": "Unused (1)",
             "pin": 24,
             "protected": true
         },
         {
-            "label": "UNUSED2",
+            "label": "Unused (2)",
             "pin": 13,
             "protected": true
         },
         {
-            "label": "IGN_START",
+            "label": "Ignition",
             "pin": 12,
             "protected": true
         }
