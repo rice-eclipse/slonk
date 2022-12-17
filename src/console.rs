@@ -28,7 +28,7 @@ pub struct UserLog<W: Write> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 /// The levels for logging.
-pub enum LogLevel {
+enum LogLevel {
     /// The lowest log level.
     /// Used exclusively for displaying random garbage to help the developer debug their problems.
     Debug = 0,
@@ -60,6 +60,8 @@ impl Display for LogLevel {
 
 impl<W: Write> UserLog<W> {
     /// Construct a new `UserLog`.
+    ///
+    /// Information written to the log will be copied over to `buf` as well.
     pub fn new(buf: W) -> UserLog<W> {
         UserLog {
             log_buffer: Mutex::new(buf),
@@ -67,25 +69,29 @@ impl<W: Write> UserLog<W> {
     }
 
     #[allow(clippy::missing_errors_doc)]
-    /// Alias for `UserLog::write(LogLevel::Debug, string)`.
+    /// Log some debug information for the user.
+    ///
+    /// This information should be unimportant for most users.
     pub fn debug(&self, string: &str) -> std::io::Result<()> {
         self.write(LogLevel::Debug, string)
     }
 
     #[allow(clippy::missing_errors_doc)]
-    /// Alias for `UserLog::write(LogLevel::Info, string)`.
+    /// Log some information for the user.
     pub fn info(&self, string: &str) -> std::io::Result<()> {
         self.write(LogLevel::Info, string)
     }
 
     #[allow(clippy::missing_errors_doc)]
-    /// Alias for `UserLog::write(LogLevel::Warn, string)`.
+    /// Write a warning for the user.
+    ///
+    /// Warnings ought to be non-fatal, but could cause an error in the future.
     pub fn warn(&self, string: &str) -> std::io::Result<()> {
         self.write(LogLevel::Warn, string)
     }
 
     #[allow(clippy::missing_errors_doc)]
-    /// Alias for `UserLog::write(LogLevel::Critical, string)`.
+    /// Log critical information to the user.
     pub fn critical(&self, string: &str) -> std::io::Result<()> {
         self.write(LogLevel::Critical, string)
     }
@@ -106,7 +112,7 @@ impl<W: Write> UserLog<W> {
     /// # Panics
     ///
     /// This function will panic if the current time is before the UNIX epoch.
-    pub fn write(&self, level: LogLevel, string: &str) -> std::io::Result<()> {
+    fn write(&self, level: LogLevel, string: &str) -> std::io::Result<()> {
         // we trust that this code was run after January 1st, 1970
         let log_time_nanos = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
