@@ -26,8 +26,6 @@ use std::{fmt::Display, io::Read};
 #[serde(tag = "type")]
 /// A parsed command received from the controller, which is now ready to be executed.
 pub enum Command {
-    /// The dashboard requested to know if the controller is ready to begin.
-    Ready,
     /// The dashboard requested that the driver be actuated to a logic level.
     Actuate {
         /// A string identifying the driver.
@@ -45,7 +43,7 @@ pub enum Command {
 }
 
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 /// The ways in which parsing an incoming command can fail.
 pub enum ParseError {
     /// The source channel closed unexpectedly.
@@ -55,14 +53,14 @@ pub enum ParseError {
     /// message.
     Malformed(String),
     /// There was an I/O error in parsing the message.
-    Io(std::io::ErrorKind),
+    Io(std::io::Error),
 }
 
 impl From<std::io::Error> for ParseError {
     /// Construct an `Io` variant of `ParseError`.
     /// This allows convenient use of the question mark operator `?` for bubbling up errors.
     fn from(err: std::io::Error) -> Self {
-        ParseError::Io(err.kind())
+        ParseError::Io(err)
     }
 }
 
@@ -129,8 +127,7 @@ impl Command {
 impl Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Command::Ready => write!(f, "ready"),
-            Command::Actuate { driver_id, value } => write!(f, "actuate {} {}", driver_id, value),
+            Command::Actuate { driver_id, value } => write!(f, "actuate {driver_id} {value}"),
             Command::Ignition => write!(f, "ignition"),
             Command::EmergencyStop => write!(f, "estop"),
         }
@@ -151,24 +148,14 @@ mod tests {
     }
 
     #[test]
-    /// Test that a `Ready` command is correctly parsed.
-    fn ready() {
-        let message = r#"{
-            "type": "Ready"
-        }"#;
-        assert_eq!(parse_helper(message), Ok(Command::Ready));
-    }
-
-    #[test]
     /// Test that a command with a bad identifier cannot be parsed.
     fn bad_command() {
         let message = r#"{
             "type": "GARBAGE"
         }"#;
-        assert_eq!(
-            parse_helper(message),
-            Err(ParseError::Malformed(message.into()))
-        );
+
+        let Err(ParseError::Malformed(s)) = parse_helper(message) else {panic!()};
+        assert_eq!(s, message);
     }
 
     #[test]
@@ -180,11 +167,11 @@ mod tests {
             "value": true
         }"#;
         assert_eq!(
-            parse_helper(message),
-            Ok(Command::Actuate {
+            parse_helper(message).unwrap(),
+            Command::Actuate {
                 driver_id: 0,
                 value: true
-            })
+            }
         );
     }
 
@@ -194,7 +181,7 @@ mod tests {
         let message = r#"{
             "type": "Ignition"
         }"#;
-        assert_eq!(parse_helper(message), Ok(Command::Ignition));
+        assert_eq!(parse_helper(message).unwrap(), Command::Ignition);
     }
 
     #[test]
@@ -203,6 +190,6 @@ mod tests {
         let message = r#"{
             "type": "EmergencyStop"
         }"#;
-        assert_eq!(parse_helper(message), Ok(Command::EmergencyStop));
+        assert_eq!(parse_helper(message).unwrap(), Command::EmergencyStop);
     }
 }

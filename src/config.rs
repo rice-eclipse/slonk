@@ -77,6 +77,8 @@ pub struct Driver {
     pub label: String,
     /// The pin actuated by the driver.
     pub pin: u8,
+    /// Whether this driver is protected from user access.
+    pub protected: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -118,6 +120,8 @@ pub struct SensorGroup {
 pub struct Sensor {
     /// The label giving the name of the sensor.
     pub label: String,
+    /// The color that this sensor should be displayed with.
+    pub color: String,
     /// The units of the sensor's calibrated value.
     pub units: String,
     /// The minimum and maximum allowable range of values that the calibrated
@@ -200,7 +204,7 @@ mod tests {
     #[allow(clippy::too_many_lines)]
     /// Test the parsing of a full configuration string.
     fn full_config() {
-        let config_str = r#"{
+        let config_str = r##"{
             "frequency_status": 10,
             "log_buffer_size": 256,
             "sensor_groups": [
@@ -212,6 +216,7 @@ mod tests {
                     "sensors": [
                         {
                             "label": "LC_MAIN",
+                            "color": "#ef3b9e",
                             "units": "lb",
                             "calibration_intercept": 0.34,
                             "calibration_slope": 33.2,
@@ -221,6 +226,7 @@ mod tests {
                         },
                         {
                             "label": "PT_FEED",
+                            "color": "#ef3b9e",
                             "units": "psi",
                             "range": [-500, 3000],
                             "calibration_intercept": 92.3,
@@ -236,7 +242,8 @@ mod tests {
             "drivers": [
                 {
                     "label": "OXI_FILL",
-                    "pin": 33
+                    "pin": 33,
+                    "protected": false
                 }
             ],
             "ignition_sequence": [
@@ -272,7 +279,7 @@ mod tests {
             "adc_cs": [
                 37
             ]
-        }"#;
+        }"##;
         let config = Configuration {
             frequency_status: 10,
             log_buffer_size: 256,
@@ -284,6 +291,7 @@ mod tests {
                 sensors: vec![
                     Sensor {
                         label: "LC_MAIN".into(),
+                        color: "#ef3b9e".into(),
                         units: "lb".into(),
                         range: None,
                         calibration_intercept: 0.34,
@@ -294,6 +302,7 @@ mod tests {
                     },
                     Sensor {
                         label: "PT_FEED".into(),
+                        color: "#ef3b9e".into(),
                         units: "psi".into(),
                         range: Some((-500., 3000.)),
                         calibration_intercept: 92.3,
@@ -309,6 +318,7 @@ mod tests {
             drivers: vec![Driver {
                 label: "OXI_FILL".into(),
                 pin: 33,
+                protected: false,
             }],
             ignition_sequence: vec![
                 Action::Actuate {
@@ -335,6 +345,6 @@ mod tests {
         };
 
         let mut cursor = Cursor::new(config_str);
-        assert!(Ok(config).eq(&Configuration::parse(&mut cursor)));
+        assert_eq!(&Ok(config), &Configuration::parse(&mut cursor));
     }
 }

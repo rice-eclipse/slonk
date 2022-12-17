@@ -74,6 +74,9 @@ pub struct Mcp3208<'a, P: GpioPin> {
     device: spi::Device<'a, P>,
 }
 
+/// Dummy ADC structure for testing.
+pub struct ReturnsNumber(pub u16);
+
 /// A structure for testing GPIO writes.
 ///
 /// A `ListenerPin` stores the history of all writes to it.
@@ -135,9 +138,20 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
     fn read(&mut self, channel: u8) -> Result<u16, ControllerError> {
         assert!((0..8).contains(&channel));
 
-        // We send two "high" bits, and then the channel ID to tell the ADC to use differential mode
-        // and read from the channel
-        let outgoing = [0x18 | channel, 0, 0];
+        // First byte sent:
+        // 5 zeros (don't tell the ADC to start just yet)
+        // Start bit: 1 (tell ADC to start listening)
+        // SGL/DIFF bit: 1
+        // D2: highest bit of channel ID
+        // --
+        // Second byte sent:
+        // D1: second-highest bit of channel ID
+        // D0: LSB of channel ID
+        // 6 zeros (don't matter)
+        // --
+        // Third byte sent:
+        // 8 zeros (don't matter)
+        let outgoing = [0x6 | channel >> 2, (channel & 0x3) << 6, 0];
         // this buffer will be populated with ADC data by the time we're done
         let mut incoming = [0; 3];
 
@@ -147,8 +161,45 @@ impl<P: GpioPin> Adc for Mcp3208<'_, P> {
         // perform an SPI transfer
         self.device.transfer(&outgoing, &mut incoming)?;
 
+        // First byte received:
+        // 8 high-Z values
+        // --
+        // Second byte received:
+        // 3 high-Z values
+        // 1 zero (null)
+        // B11..=B8 (high 4 bits of ADC reading)
+        // --
+        // Third byte received:
+        // B7..=B0 (low 8 bits of ADC reading)
+
+        // Verify that we receieved a null bit (implies the ADC is actually any good)
+        if incoming[1] & 0x10 != 0 {
+            return Err(ControllerError::Hardware(
+                "no null bit received from ADC - is it connected?",
+            ));
+        }
+
+        // Mask out high-Z data in incoming bytes
+        incoming[1] &= 0x0F;
+
         // the back two bytes of `incoming` now have our data in big endian representation.
         Ok(u16::from_be_bytes([incoming[1], incoming[2]]))
+    }
+}
+
+impl Adc for ReturnsNumber {
+    fn read(&mut self, _: u8) -> Result<u16, crate::ControllerError> {
+        Ok(self.0)
+    }
+}
+
+impl<T: GpioPin + ?Sized> GpioPin for Box<T> {
+    fn read(&mut self) -> Result<bool, gpio_cdev::Error> {
+        self.as_mut().read()
+    }
+
+    fn write(&mut self, value: bool) -> Result<(), gpio_cdev::Error> {
+        self.as_mut().write(value)
     }
 }
 
@@ -174,5 +225,119 @@ impl GpioPin for LineHandle {
         self.set_value(int_value)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::{
+        spi::{Bus, Device},
+        *,
+    };
+
+    /// A GPIO spoof pin which reads off a vector of values, and which cannot be written to.
+    struct VectorPin {
+        values: Vec<bool>,
+        index: usize,
+    }
+
+    impl GpioPin for VectorPin {
+        fn read(&mut self) -> Result<bool, gpio_cdev::Error> {
+            let value = self.values[self.index];
+            self.index += 1;
+            self.index %= self.values.len();
+            Ok(value)
+        }
+
+        fn write(&mut self, _value: bool) -> Result<(), gpio_cdev::Error> {
+            panic!("cannot write to vector pin");
+        }
+    }
+    #[test]
+    /// Test a successful MCP3208 ADC read with spoofed gpio pins.
+    fn mcp3208_read() {
+        let bus = Mutex::new(Bus::<Box<dyn GpioPin>> {
+            period: Duration::from_micros(1),
+            pin_mosi: Box::new(ListenerPin::new(false)),
+            pin_miso: Box::new(VectorPin {
+                values: vec![
+                    true,  // MSB of first byte read
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  // LSB of first byte read
+                    true,  // MSB of second byte read
+                    true,  //
+                    true,  //
+                    false, // null bit
+                    true,  // MSB of ADC read value
+                    false, //
+                    true,  //
+                    false, // LSB of second byte read
+                    true,  // MSB of third byte read
+                    false, //
+                    false, //
+                    true,  //
+                    false, //
+                    false, //
+                    true,  //
+                    false, // LSB of third byte read / LSB of read value
+                ],
+                index: 0,
+            }),
+            pin_clk: Box::new(ListenerPin::new(false)),
+        });
+        let dev = Device::new(&bus, Box::new(ListenerPin::new(true)));
+        let mut adc = Mcp3208::new(dev);
+
+        assert_eq!(adc.read(0).unwrap(), 2706);
+    }
+
+    #[test]
+    /// Test that reading the ADC fails if the null bit is bad.
+    fn mcp3208_bad_null_bit() {
+        let bus = Mutex::new(Bus::<Box<dyn GpioPin>> {
+            period: Duration::from_micros(1),
+            pin_mosi: Box::new(ListenerPin::new(false)),
+            pin_miso: Box::new(VectorPin {
+                values: vec![
+                    true,  // MSB of first byte read
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  //
+                    true,  // LSB of first byte read
+                    true,  // MSB of second byte read
+                    true,  //
+                    true,  //
+                    true,  // null bit
+                    true,  // MSB of ADC read value
+                    false, //
+                    true,  //
+                    false, // LSB of second byte read
+                    true,  // MSB of third byte read
+                    false, //
+                    false, //
+                    true,  //
+                    false, //
+                    false, //
+                    true,  //
+                    false, // LSB of third byte read / LSB of read value
+                ],
+                index: 0,
+            }),
+            pin_clk: Box::new(ListenerPin::new(false)),
+        });
+        let dev = Device::new(&bus, Box::new(ListenerPin::new(true)));
+        let mut adc = Mcp3208::new(dev);
+
+        assert!(adc.read(0).is_err());
     }
 }
