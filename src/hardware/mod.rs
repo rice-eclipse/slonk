@@ -75,12 +75,54 @@ pub struct Mcp3208<'a, P: GpioPin> {
 }
 
 /// Dummy ADC structure for testing.
+///
+/// When read from, it will always return the same number every time.
+///
+/// # Examples
+///
+/// ```
+/// # use slonk::ControllerError;
+/// #
+/// # fn main() -> Result<(), ControllerError> {
+/// use slonk::hardware::{ReturnsNumber, Adc};
+///
+/// let mut adc = ReturnsNumber(4);
+///
+/// assert_eq!(adc.read(0)?, 4);
+/// assert_eq!(adc.read(1)?, 4);
+/// assert_eq!(adc.read(2)?, 4);
+///
+/// # Ok(())
+/// # }
+/// ```
 pub struct ReturnsNumber(pub u16);
 
 /// A structure for testing GPIO writes.
 ///
 /// A `ListenerPin` stores the history of all writes to it.
 /// When read from, a `ListenerPin` will return the last written value of the pin.
+///
+/// # Examples
+///
+/// ```
+/// # use gpio_cdev;
+/// #
+/// # fn main() -> Result<(), gpio_cdev::Error> {
+///
+/// use slonk::hardware::{ListenerPin, GpioPin};
+///
+/// let mut pin = ListenerPin::new(false);
+///
+/// assert_eq!(pin.read()?, false);
+///
+/// pin.write(true);
+/// assert_eq!(pin.read()?, true);
+///
+/// assert_eq!(pin.history(), &vec![false, true]);
+///
+/// # Ok(())
+/// # }
+/// ```
 pub struct ListenerPin(Vec<bool>);
 
 impl<'a, P: GpioPin> Mcp3208<'a, P> {
