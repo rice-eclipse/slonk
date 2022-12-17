@@ -20,13 +20,13 @@
 
 use std::sync::{PoisonError, RwLock};
 
-pub mod config;
-pub mod console;
-pub mod data;
-pub mod execution;
+mod config;
+mod console;
+mod data;
+mod execution;
 pub mod hardware;
-pub mod incoming;
-pub mod outgoing;
+mod incoming;
+mod outgoing;
 pub mod server;
 
 /// A guard for controller state which can be used to notify other threads of changes to controller
