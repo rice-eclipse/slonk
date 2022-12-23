@@ -246,7 +246,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let config = match Configuration::parse(&mut BufReader::new(config_file)) {
         Ok(c) => c,
         Err(e) => {
-            user_log.critical(&format!("Failed to parse configuration: {:?}", e))?;
+            user_log.critical(&format!("Failed to parse configuration: {e:?}"))?;
             return Err(e.into());
         }
     };
@@ -358,7 +358,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
             let mut stream = match client_res {
                 Ok(i) => i,
                 Err(e) => {
-                    user_log.warn(&format!("failed to collect incoming client: {}", e))?;
+                    user_log.warn(&format!("failed to collect incoming client: {e}"))?;
                     continue;
                 }
             };
@@ -426,10 +426,10 @@ fn handle_client<'a>(
                         return Ok(());
                     }
                     ParseError::Malformed(s) => {
-                        user_log.warn(&format!("Received invalid command {}", s))?;
+                        user_log.warn(&format!("Received invalid command {s}"))?;
                     }
                     ParseError::Io(e) => {
-                        user_log.warn(&format!("encountered I/O error: {}", e))?;
+                        user_log.warn(&format!("encountered I/O error: {e}"))?;
                         return Err(ControllerError::Io(e));
                     }
                 }
