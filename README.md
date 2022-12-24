@@ -12,8 +12,7 @@ less of a pain to work with.
 
 ## API
 
-`slonk` also includes a redesign for the API for communcations between the 
-dashboard and controller.
+`slonk` also includes a redesign for the API for communcations between the dashboard and controller.
 For further details, refer to
 [api.md](https://github.com/rice-eclipse/slonk/blob/master/api.md).
 
@@ -21,38 +20,47 @@ This documnent also explains the structure of configuration files.
 
 ## Installation and dependencies
 
-`slonk` is written in Rust, and uses Cargo, the main Rust build system, to 
-build and test.
-We recommend using [rustup](https://rustup.rs) to set up the Rust build
-environment.
-We will list any non-Cargo dependencies we add here (such as for C
-interoperation).
+`slonk` is written in Rust, and uses Cargo, the main Rust build system, to build and test.
+We recommend using [rustup](https://rustup.rs) to set up the Rust build environment.
 
 ## Building
 
-To build the release version of the code, navigate to the root directory of this
-repository and enter `cargo build --release`.
-To run the controller, either run `cargo run --release` or
-`./target/release/slonk` after building.
+To build the release version of the code, navigate to the root directory of this repository and 
+enter `cargo build --release`.
+To run the controller, run `./target/release/slonk` after building.
+
+`slonk` must be run as root (via `sudo`) in order to take ownership of GPIO. 
 
 The controller executable takes two arguments:
 
 1. A path to the configuration JSON file.
 1. A path to the directory where logs will be stored.
 
-For example, the following command would run the engine controller for the Titan
-motor configuration and store logs in `../slonk-logs/my_test_logs`.
+For example, the following command would run the engine controller for the Titan motor configuration 
+and store logs in `../slogs/my_test_logs`.
 
 ```sh
-cargo run --release config/titan.json ../slonk-logs/my_test_logs
+cargo build --release
+sudo ./target/release/slonk config/titan.json ../slogs/my_test_logs
 ```
 
 To run all tests, run `cargo test`.
 
+## Test binary
+
+The main `slonk` binary can only be run as root on a Raspberry Pi. 
+To make testing easier, we also provide a test binary that can be run as a non-privileged user on 
+any Linux computer.
+To run it, first build with `cargo build --release` and then run `./target/release/dummy`.
+It takes the same arguments as the main controller executable.
+
+```sh
+cargo build --release
+sudo .target/release/dummy config/titan.json ../slogs/my_dummy_slogs
+```
+
 ## Standard Git Procedures
 
-To reduce chances of version control blunders, we've created standard git
-procedures.
-Refer to
-[git_procedures.md](https://github.com/rice-eclipse/slonk/blob/master/git_procedures.md)
+To reduce chances of version control blunders, we've created standard git procedures.
+Refer to [git_procedures.md](https://github.com/rice-eclipse/slonk/blob/master/git_procedures.md)
 for more details.

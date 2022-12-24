@@ -101,6 +101,23 @@ The fields of the main configuration object are as follows:
 - `estop_sequence` - array: A list of objects describing each sequential
   operation to be taken during the shutoff sequence.
 
+### Drivers
+
+Each driver is represented by an object in the `drivers` list. 
+It will have the following keys:
+
+- `label` - string: A human-readable name for the driver.
+
+- `pin` - int: The GPIO pin that the driver controls. 
+  Note that the GPIO pin is by software standards, and it is *not* the phyiscal pinout on the 
+  Raspberry Pi.
+
+- `protected` - bool: Whether the user of the dashboard can directly actuate this pin.
+  If `false`, the user can only read the state of this driver, and the only way the driver can be 
+  actuated is via an ignition or emergency stop sequence.
+  The ignition driver should always be protected.
+
+
 ### Sensors
 
 Each sensor group (each being an element of the `sensor_groups` field) is an
@@ -126,6 +143,8 @@ object with the following fields:
 
   - `label` - string: The unique identifier for the sensor.
     May not be shared across sensor groups.
+
+  - `color` - string: A color which can be used for displaying the sensor's value.
 
   - `units` - string: The units of the sensor's calibrated value.
 
@@ -301,25 +320,6 @@ controller to receive from the dashboard:
 }
 ```
 
-### Dashboard to controller
-
-Messages from the dashboard to the controller may or may not be processed
-sequentially.
-For safety reasons (accepting an emergency stop during an active message), each
-message received will receive its own thread to process it.
-
-#### Ready
-
-A `Ready` message is sent immediately after the controller has fully parsed a
-`Configuration` message and is ready to accept new messages from the controller.
-The `ready` message has no extra fields.
-
-```json
-{
-  "type": "Ready"
-}
-```
-
 #### Driver actuation
 
 All driver actuation messages will have the type `Actuate`.
@@ -373,7 +373,7 @@ shutdown procedure.
 
 #### Configuration setup
 
-A `Configuration` message is given at the start of the conversation, as soon as
+A `Config` message is given at the start of the conversation, as soon as
 the dashboard connects to the controller.
 This transmits the entire contents of the configuration file as a field of the
 message.

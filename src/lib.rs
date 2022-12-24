@@ -1,14 +1,33 @@
+/*
+  slonk, a rocket engine controller.
+  Copyright (C) 2022 Rice Eclipse.
+
+  slonk is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  slonk is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #![warn(clippy::pedantic)]
 
 use std::sync::{PoisonError, RwLock};
 
-pub mod config;
-pub mod console;
-pub mod data;
-pub mod execution;
+mod config;
+mod console;
+mod data;
+mod execution;
 pub mod hardware;
-pub mod incoming;
-pub mod outgoing;
+mod incoming;
+mod outgoing;
+pub mod server;
 
 /// A guard for controller state which can be used to notify other threads of changes to controller
 /// state.
@@ -56,13 +75,17 @@ pub enum ControllerError {
     /// The library `serde_json` failed to deserialize a structure because it was malformed.
     MalformedDeserialize(serde_json::Error),
     /// There was an I/O error when writing to or reading from the network or a file.
-    Io,
+    Io(std::io::Error),
+    /// There was an error with serialization or deserialization.
+    Serde(serde_json::Error),
     /// There was an error while attempting to perform some GPIO action.
     Gpio(gpio_cdev::Error),
+    /// Something went wrong with the hardware.
+    Hardware(&'static str),
     /// The configuration was incorrectly formed.
     Configuration(config::Error),
     /// The user gave the wrong input arguments to the main executable.
-    Args,
+    Args(String),
     /// An illegal state transition was attempted.
     /// This is often a sign of a critical internal logic error.
     IllegalTransition {
@@ -153,10 +176,7 @@ impl<T> From<PoisonError<T>> for ControllerError {
 
 impl From<serde_json::Error> for ControllerError {
     fn from(err: serde_json::Error) -> Self {
-        match err.classify() {
-            serde_json::error::Category::Io => ControllerError::Io,
-            _ => ControllerError::MalformedDeserialize(err),
-        }
+        ControllerError::Serde(err)
     }
 }
 
@@ -173,7 +193,7 @@ impl From<config::Error> for ControllerError {
 }
 
 impl From<std::io::Error> for ControllerError {
-    fn from(_: std::io::Error) -> Self {
-        ControllerError::Io
+    fn from(err: std::io::Error) -> Self {
+        ControllerError::Io(err)
     }
 }

@@ -1,3 +1,21 @@
+/*
+  slonk, a rocket engine controller.
+  Copyright (C) 2022 Rice Eclipse.
+
+  slonk is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  slonk is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 //! The core sensor data collection threads.
 
 use std::{
@@ -57,7 +75,7 @@ pub fn sensor_listen<'a>(
     user_log: &UserLog<impl Write>,
     adcs: &[Mutex<impl Adc>],
     state: &'a StateGuard,
-    dashboard_stream: &'a Mutex<DashChannel<impl Write, impl Write>>,
+    dashboard_stream: &'a DashChannel<impl Write, impl Write>,
 ) -> Result<(), ControllerError> {
     assert!(usize::from(group_id) < configuration.sensor_groups.len());
 
@@ -73,7 +91,7 @@ pub fn sensor_listen<'a>(
     // most recent values read, to be logged.
     // in each queue, the "back" contains the most recent readings and the "front" contains the
     // oldest ones.
-    let mut most_recent_readings: Vec<VecDeque<(SystemTime, u16)>> =
+    let mut most_recent_readings: Vec<VecDeque<(SystemTime, u16, f64)>> =
         vec![VecDeque::new(); group.sensors.len()];
 
     // Rolling average values for sensor readings.
@@ -112,12 +130,12 @@ pub fn sensor_listen<'a>(
                 continue;
             };
             let read_time = SystemTime::now();
-            most_recent_readings[idx].push_back((read_time, reading));
+            let calibrated_value =
+                f64::from(reading) * sensor.calibration_slope + sensor.calibration_intercept;
+            most_recent_readings[idx].push_back((read_time, reading, calibrated_value));
             transmission_readings[idx] = Some((read_time, reading));
             // update rolling averages
             let width = sensor.rolling_average_width.unwrap_or(1);
-            let calibrated_value =
-                f64::from(reading) * sensor.calibration_slope + sensor.calibration_intercept;
             let rolling_avg = (rolling_averages[idx] * (f64::from(width - 1)) + calibrated_value)
                 / f64::from(width);
             rolling_averages[idx] = rolling_avg;
@@ -135,9 +153,7 @@ pub fn sensor_listen<'a>(
                     // this may return an error due to illegal transistion, but that is not our
                     // problem.
                     thread_scope.spawn(|| {
-                        if let Ok(mut drivers_guard) = driver_lines.lock() {
-                            emergency_stop(configuration, drivers_guard.as_mut(), state);
-                        }
+                        emergency_stop(configuration, driver_lines, state);
                     });
                 }
             }
@@ -145,10 +161,9 @@ pub fn sensor_listen<'a>(
 
         // transmit data to the dashboard if it's been long enough since our last transmission
         if SystemTime::now() > last_transmission_time + transmission_period {
-            let mut channel_guard = dashboard_stream.lock()?;
-            if channel_guard.has_target() {
+            if dashboard_stream.has_target()? {
                 // send message to dashboard
-                let send_result = channel_guard.send(&Message::SensorValue {
+                let send_result = dashboard_stream.send(&Message::SensorValue {
                     group_id,
                     readings: &transmission_readings
                         .iter()
@@ -174,15 +189,17 @@ pub fn sensor_listen<'a>(
             transmission_readings = vec![None; group.sensors.len()];
         }
 
-        for (sensor_id, reading_queue) in most_recent_readings.iter().enumerate() {
+        for (sensor_id, reading_queue) in most_recent_readings.iter_mut().enumerate() {
             if reading_queue.len() >= configuration.log_buffer_size {
                 #[allow(unused_must_use)]
-                if let Err(e) = write_sensor_log(&mut log_files[sensor_id], reading_queue) {
+                if let Err(e) = write_sensor_log(&mut log_files[sensor_id], reading_queue.iter()) {
                     user_log.warn(&format!(
                         "unable to write data for sensor {}: {e:?}",
                         group.sensors[sensor_id].label
                     ));
                 }
+
+                reading_queue.clear();
             }
         }
 
@@ -235,7 +252,7 @@ pub fn driver_status_listen(
     log_file: &mut impl Write,
     user_log: &UserLog<impl Write>,
     state: &StateGuard,
-    dashboard_stream: &Mutex<DashChannel<impl Write, impl Write>>,
+    dashboard_stream: &DashChannel<impl Write, impl Write>,
 ) -> Result<(), ControllerError> {
     // the time required to sleep
     let sleep_time = Duration::from_secs(1) / configuration.frequency_status;
@@ -276,9 +293,11 @@ pub fn driver_status_listen(
         }
 
         // optionally transmit to dashboard
-        dashboard_stream.lock()?.send(&Message::DriverValue {
+        dashboard_stream.send(&Message::DriverValue {
             values: &driver_states,
         })?;
+
+        drop(drivers_guard); // don't keep the drivers guard!!
 
         // take a nap until we are ready to send another message
         sleep(sleep_time);
@@ -331,10 +350,11 @@ fn write_driver_log(
 /// be immediately saved.
 ///
 /// For instance, if a sensor had a reading of 42 at a time of 1 second, 500 nanoseconds after the
-/// UNIX epoch began, the following text would be written:
+/// UNIX epoch began, and the calibrated reading from the sensor was 1.25, the following text would
+/// be written:
 ///
 /// ```text
-/// 1000000500,42
+/// 1000000500,42,1.24
 ///
 /// ```
 ///
@@ -349,12 +369,16 @@ fn write_driver_log(
 /// This function will panic if a time contained in the ADC readings was before the UNIX epoch.
 fn write_sensor_log<'a>(
     log_file: &mut impl Write,
-    adc_readings: impl IntoIterator<Item = &'a (SystemTime, u16)>,
+    adc_readings: impl IntoIterator<Item = &'a (SystemTime, u16, f64)>,
 ) -> std::io::Result<()> {
-    for (sys_time, reading) in adc_readings {
+    for (sys_time, reading, calib) in adc_readings {
         let since_epoch_time = sys_time.duration_since(SystemTime::UNIX_EPOCH).unwrap();
 
-        writeln!(log_file, "{},{}", since_epoch_time.as_nanos(), reading)?;
+        writeln!(
+            log_file,
+            "{},{reading},{calib}",
+            since_epoch_time.as_nanos()
+        )?;
     }
 
     log_file.flush()
@@ -366,24 +390,15 @@ mod tests {
 
     use serde_json::Value;
 
-    use crate::hardware::ListenerPin;
+    use crate::hardware::{ListenerPin, ReturnsNumber};
 
     use super::*;
-
-    /// Dummy ADC structure for testing.
-    struct ReturnsNumber(u16);
-
-    impl Adc for ReturnsNumber {
-        fn read(&mut self, _: u8) -> Result<u16, crate::ControllerError> {
-            Ok(self.0)
-        }
-    }
 
     #[test]
     #[allow(clippy::too_many_lines)]
     fn data_written() {
         // create some dummy configuration for the sensor listener thread to read
-        let config = r#"{
+        let config = r##"{
             "frequency_status": 10,
             "log_buffer_size": 1,
             "sensor_groups": [
@@ -395,6 +410,7 @@ mod tests {
                     "sensors": [
                         {
                             "label": "dummy_sensor0",
+                            "color": "#ef3b9e",
                             "units": "mops",
                             "calibration_intercept": 0,
                             "calibration_slope": 0,
@@ -403,6 +419,7 @@ mod tests {
                         },
                         {
                             "label": "dummy_sensor1",
+                            "color": "#ef3b9e",
                             "units": "mops",
                             "calibration_intercept": 0,
                             "calibration_slope": 0,
@@ -422,7 +439,7 @@ mod tests {
             "spi_clk": 0,
             "spi_frequency_clk": 50000,
             "adc_cs": [0, 0]
-        }"#;
+        }"##;
         let adcs: Vec<Mutex<ReturnsNumber>> =
             (0..2).map(|n| Mutex::new(ReturnsNumber(n))).collect();
         let mut cfg_cursor = Cursor::new(config);
@@ -433,13 +450,10 @@ mod tests {
         let mut output_log = Vec::new();
         // stream of outgoing messages
         let mut output_stream_buf = Vec::new();
-        let output_stream = Mutex::new(DashChannel::<&mut Vec<u8>, &mut Vec<u8>>::new(
-            &mut output_log,
-        ));
+        let output_stream = DashChannel::<&mut Vec<u8>, &mut Vec<u8>>::new(&mut output_log);
         output_stream
-            .lock()
-            .unwrap()
-            .set_channel(&mut output_stream_buf);
+            .set_channel(Some(&mut output_stream_buf))
+            .unwrap();
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here
@@ -509,17 +523,16 @@ mod tests {
             .collect();
 
         for (idx, logged_string) in logged_strings.iter().enumerate() {
-            let tokens = logged_string
-                .split(',')
-                .flat_map(|s| s.split('\n'))
-                .map(String::from)
-                .collect::<Vec<_>>();
+            let adc_readings = logged_string
+                .split('\n')
+                .filter_map(|l| Some(l.split(',').nth(1)?.parse::<usize>().unwrap()))
+                .collect::<Vec<usize>>();
 
-            // check that sensor readings got written in the right columns
-            assert_eq!(tokens[1], format!("{idx}").as_str());
-            assert_eq!(tokens[3], format!("{idx}").as_str());
-            assert_eq!(tokens[5], format!("{idx}").as_str());
-            assert_eq!(tokens[6], "");
+            for &adc_val in &adc_readings {
+                assert_eq!(adc_val, idx);
+            }
+
+            assert_eq!(adc_readings.len(), 2);
         }
     }
 
@@ -527,7 +540,7 @@ mod tests {
     /// Test that an emergency stop is successfully called.
     fn estop_called() {
         // create some dummy configuration for the sensor listener thread to read
-        let config = r#"{
+        let config = r##"{
             "frequency_status": 10,
             "log_buffer_size": 1,
             "sensor_groups": [
@@ -539,6 +552,7 @@ mod tests {
                     "sensors": [
                         {
                             "label": "dummy_sensor0",
+                            "color": "#ef3b9e",
                             "units": "mops",
                             "calibration_intercept": 0,
                             "calibration_slope": 1,
@@ -566,7 +580,7 @@ mod tests {
             "spi_clk": 0,
             "spi_frequency_clk": 50000,
             "adc_cs": [0]
-        }"#;
+        }"##;
 
         let adc = Mutex::new(ReturnsNumber(100));
 
@@ -575,7 +589,7 @@ mod tests {
 
         let state = StateGuard::new(ControllerState::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
-        let output_stream = Mutex::new(DashChannel::<Vec<u8>, Vec<u8>>::new(Vec::new()));
+        let output_stream = DashChannel::<Vec<u8>, Vec<u8>>::new(Vec::new());
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here
