@@ -85,7 +85,7 @@ pub enum ControllerError {
     /// The configuration was incorrectly formed.
     Configuration(config::Error),
     /// The user gave the wrong input arguments to the main executable.
-    Args(String),
+    Args(&'static str),
     /// An illegal state transition was attempted.
     /// This is often a sign of a critical internal logic error.
     IllegalTransition {

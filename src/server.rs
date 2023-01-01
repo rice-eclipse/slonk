@@ -224,10 +224,10 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     // Use arguments to get configuration file
     let json_path = args
         .get(0)
-        .ok_or_else(|| ControllerError::Args("No configuration JSON path given".to_string()))?;
+        .ok_or(ControllerError::Args("No configuration JSON path given"))?;
     let logs_path = args
         .get(1)
-        .ok_or_else(|| ControllerError::Args("No logs path given".to_string()))?;
+        .ok_or(ControllerError::Args("No logs path given"))?;
 
     create_dir_all(logs_path)?;
     let user_log = UserLog::new(file_create_new(PathBuf::from_iter([
