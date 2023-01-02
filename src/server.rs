@@ -37,9 +37,10 @@ use crate::{
         spi::{Bus, Device},
         Adc, GpioPin, ListenerPin, Mcp3208, ReturnsNumber,
     },
-    incoming::{Command, ParseError},
+    incoming::{self, Command},
     outgoing::{DashChannel, Message},
-    ControllerError, ControllerState, StateGuard,
+    state::{Guard, State},
+    ControllerError,
 };
 
 /// A trait for functions which can create the necessary hardware for the server to run.
@@ -297,7 +298,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
 
     user_log.debug("Successfully created log files")?;
 
-    let state = StateGuard::new(ControllerState::Standby);
+    let state = Guard::new(State::Standby);
     let state_ref = &state;
 
     user_log.debug("Now acquiring GPIO")?;
@@ -412,7 +413,7 @@ fn handle_client<'a>(
     driver_lines: &'a Mutex<Vec<impl GpioPin + Send>>,
     cmd_log_file: &'a Mutex<impl Write + Send>,
     user_log: &'a UserLog<impl Write + Send>,
-    state: &'a StateGuard,
+    state: &'a Guard,
 ) -> Result<(), ControllerError> {
     to_dash.send(&Message::Config { config })?;
     user_log.debug("Successfully sent configuration to dashboard.")?;
@@ -421,16 +422,17 @@ fn handle_client<'a>(
             Ok(cmd) => cmd,
             Err(e) => {
                 match e {
-                    ParseError::SourceClosed => {
-                        user_log.info("Dashboard disconnected")?;
-                        return Ok(());
+                    incoming::Error::Malformed(s) => {
+                        user_log.critical(&format!(
+                            "Received malformed command: {}. Future commands will likely also be invalid",
+                            String::from_utf8_lossy(&s)
+                        ))?;
                     }
-                    ParseError::Malformed(s) => {
-                        user_log.warn(&format!("Received invalid command {s}"))?;
-                    }
-                    ParseError::Io(e) => {
-                        user_log.warn(&format!("encountered I/O error: {e}"))?;
-                        return Err(ControllerError::Io(e));
+                    incoming::Error::Io(e) => {
+                        user_log.warn(&format!(
+                            "Encounter I/O error while parsing message: {:?}",
+                            e
+                        ))?;
                     }
                 }
                 continue;
@@ -444,7 +446,12 @@ fn handle_client<'a>(
                 value: _,
             }
         ) {
-            handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)?;
+            if let Err(e) =
+                handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)
+            {
+                user_log.critical(&format!("Encountered error while executing command: {e:?}"))?;
+                continue;
+            }
         } else {
             // spawn thread to handle command
             thread_scope.spawn(move || {
