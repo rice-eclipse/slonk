@@ -229,9 +229,9 @@ mod tests {
                 }
             ],
             "estop_sequence": [],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 13,
+            "spi_clk": 14,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;
@@ -270,7 +270,11 @@ mod tests {
             "sensor_groups": [],
             "pre_ignite_time": 0,
             "post_ignite_time": 0,
-            "drivers": [],
+            "drivers": [{
+                "label": "OXI_FILL",
+                "pin": 21,
+                "protected": false
+            }],
             "ignition_sequence": [
                 {
                     "type": "Actuate",
@@ -284,9 +288,9 @@ mod tests {
                 }
             ],
             "estop_sequence": [],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;
@@ -324,9 +328,9 @@ mod tests {
                     }
                 }
             ],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;
@@ -373,9 +377,9 @@ mod tests {
                     "value": false
                 }
             ],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;

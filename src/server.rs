@@ -246,7 +246,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let config = match Configuration::parse(&mut BufReader::new(config_file)) {
         Ok(c) => c,
         Err(e) => {
-            user_log.critical(&format!("Failed to parse configuration: {e:?}"))?;
+            user_log.critical(&format!("Failed to parse configuration: {e}"))?;
             return Err(e.into());
         }
     };

@@ -18,7 +18,9 @@
 
 //! Loading and validating configurations for the engine controller.
 
-use std::{io::Read, time::Duration};
+use std::{collections::HashSet, io::Read, time::Duration};
+
+use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
@@ -144,18 +146,24 @@ pub struct Sensor {
     pub channel: u8,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 /// The set of errors that can occur when validating a configuration.
 pub enum Error {
     /// The configuration was malformed and could not be parsed into a`Configuration` object.
     /// The string is a description of the cause of the error.
-    Malformed(String),
+    Malformed(serde_json::Error),
     /// A sensor's definition referred to an ADC which did not exist.
-    NoSuchAdc,
+    NoSuchAdc(u8),
     /// A sensor's definition referred to a channel which is out of bounds on an ADC.
-    BadChannel,
+    BadChannel(u8),
     /// The SPI clock frequency was set too slow.
     ClockTooSlow,
+    /// A procedure references a driver which does not exist.
+    NoSuchDriver(u8),
+    /// Two pins are duplicated for differing functions.
+    DuplicatePin(u8),
+    /// A pin is used for
+    ReservedPin(u8),
 }
 
 impl Configuration {
@@ -168,29 +176,90 @@ impl Configuration {
     /// This function will return errors in line with the definition of `Error` in this module.
     pub fn parse(source: &mut impl Read) -> Result<Configuration, Error> {
         // deserialize the configuration
-        let config: Configuration =
-            serde_json::from_reader(source).map_err(|e| Error::Malformed(e.to_string()))?;
+        let config: Configuration = serde_json::from_reader(source).map_err(Error::Malformed)?;
 
         // now validate it
 
+        // check that SPI frequency is correct
         if u64::from(config.spi_frequency_clk) < Mcp3208::<ListenerPin>::SPI_MIN_FREQUENCY {
             return Err(Error::ClockTooSlow);
         }
 
+        // check that each sensor has an ADC associated with it
         for group in &config.sensor_groups {
             for sensor in &group.sensors {
                 if usize::from(sensor.adc) >= config.adc_cs.len() {
-                    return Err(Error::NoSuchAdc);
+                    return Err(Error::NoSuchAdc(sensor.adc));
                 }
 
                 if sensor.channel >= 8 {
-                    return Err(Error::BadChannel);
+                    return Err(Error::BadChannel(sensor.channel));
                 }
             }
         }
 
+        // check that actuations correspond to real drivers
+        for procedure in [&config.ignition_sequence, &config.estop_sequence] {
+            for step in procedure {
+                let Action::Actuate { driver_id, value: _ } = step else { continue; };
+                if usize::from(*driver_id) > config.drivers.len() {
+                    return Err(Error::NoSuchDriver(*driver_id));
+                }
+            }
+        }
+
+        // check that no pins are reused in the configuration
+        // also, check that no illegal pins (i.e. ones on the Raspberry Pi which are reserved) are
+        // used
+        let mut pins_used = HashSet::new();
+        for pin in config
+            .drivers
+            .iter()
+            .map(|d| d.pin)
+            .chain([config.spi_mosi, config.spi_miso, config.spi_clk])
+            .chain(config.adc_cs.iter().copied())
+        {
+            if !is_legal(pin) {
+                return Err(Error::ReservedPin(pin));
+            }
+            if pins_used.contains(&pin) {
+                return Err(Error::DuplicatePin(pin));
+            }
+            pins_used.insert(pin);
+        }
+
         // all validation steps passed
         Ok(config)
+    }
+}
+
+/// Determine whether a GPIO pin ID is a legal pin for use in the controller.
+fn is_legal(pin: u8) -> bool {
+    // There are GPIO pins 0 through 27 (inclusive).
+    // However, pins 0 and 1 are reserved for EEPROM.
+    1 < pin && pin <= 27
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Malformed(json_err) => {
+                write!(f, "Failed to parse JSON for configuration: {json_err}")
+            }
+            Error::NoSuchAdc(a) => write!(
+                f,
+                "ADC {a} is referenced but not listed in set of ADC chip select pins"
+            ),
+            Error::BadChannel(c) => write!(f, "ADC channel {c} referenced (must be in 0..=7)"),
+            Error::ClockTooSlow => write!(
+                f,
+                "SPI clock frequency is too slow (must be at least {} Hz)",
+                Mcp3208::<ListenerPin>::SPI_MIN_FREQUENCY
+            ),
+            Error::NoSuchDriver(d) => write!(f, "A procedure refers to a driver with ID {d}, but no such driver is given in the list of drivers"),
+            Error::DuplicatePin(p) => write!(f, "GPIO pin {p} is used for multiple purposes"),
+            Error::ReservedPin(p) => write!(f, "GPIO pin {p} is not allowed to be used on the Raspberry Pi"),
+        }
     }
 }
 
@@ -242,7 +311,7 @@ mod tests {
             "drivers": [
                 {
                     "label": "OXI_FILL",
-                    "pin": 33,
+                    "pin": 21,
                     "protected": false
                 }
             ],
@@ -273,11 +342,11 @@ mod tests {
                 }
             ],
             "spi_mosi": 26,
-            "spi_miso": 27,
-            "spi_clk": 28,
+            "spi_miso": 25,
+            "spi_clk": 24,
             "spi_frequency_clk": 50000,
             "adc_cs": [
-                37
+                20
             ]
         }"##;
         let config = Configuration {
@@ -317,7 +386,7 @@ mod tests {
             post_ignite_time: 5000,
             drivers: vec![Driver {
                 label: "OXI_FILL".into(),
-                pin: 33,
+                pin: 21,
                 protected: false,
             }],
             ignition_sequence: vec![
@@ -338,13 +407,13 @@ mod tests {
                 value: false,
             }],
             spi_mosi: 26,
-            spi_miso: 27,
-            spi_clk: 28,
+            spi_miso: 25,
+            spi_clk: 24,
             spi_frequency_clk: 50_000,
-            adc_cs: vec![37],
+            adc_cs: vec![20],
         };
 
         let mut cursor = Cursor::new(config_str);
-        assert_eq!(&Ok(config), &Configuration::parse(&mut cursor));
+        assert_eq!(config, Configuration::parse(&mut cursor).unwrap());
     }
 }

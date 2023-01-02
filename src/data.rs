@@ -434,11 +434,11 @@ mod tests {
             "drivers": [],
             "ignition_sequence": [],
             "estop_sequence": [],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": [0, 0]
+            "adc_cs": [14, 15]
         }"##;
         let adcs: Vec<Mutex<ReturnsNumber>> =
             (0..2).map(|n| Mutex::new(ReturnsNumber(n))).collect();
@@ -575,11 +575,11 @@ mod tests {
                     "nanos": 0
                 }
             }],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": [0]
+            "adc_cs": [14]
         }"##;
 
         let adc = Mutex::new(ReturnsNumber(100));
