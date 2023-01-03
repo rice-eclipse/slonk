@@ -119,25 +119,33 @@ impl<C: Write, M: Write> DashChannel<C, M> {
         let mut channel_guard = self.dash_channel.write().map_err(|_| Error::Poison)?;
         let mut message_log_guard = self.message_log.lock().map_err(|_| Error::Poison)?;
         if let Some(ref mut writer) = *channel_guard {
-            if serde_json::to_writer(&mut *writer, message).is_ok() {
-                // log that we sent this message to the dashboard
-                // first, mark the time
-                write!(
-                    message_log_guard,
-                    "{},",
-                    SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_nanos()
-                )
-                .map_err(Error::LogFile)?;
-                // then, the message
-                serde_json::to_writer(&mut *message_log_guard, message)
-                    .map_err(|e| Error::LogFile(std::io::Error::from(e)))?;
-                // then a trailing newline
-                writeln!(message_log_guard).map_err(Error::LogFile)?;
-            } else {
-                *channel_guard = None;
+            match serde_json::to_writer(&mut *writer, message) {
+                Ok(()) => {
+                    // log that we sent this message to the dashboard
+                    // first, mark the time
+                    write!(
+                        message_log_guard,
+                        "{},",
+                        SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap()
+                            .as_nanos()
+                    )
+                    .map_err(Error::LogFile)?;
+                    // then, the message
+                    serde_json::to_writer(&mut *message_log_guard, message)
+                        .map_err(|e| Error::LogFile(std::io::Error::from(e)))?;
+                    // then a trailing newline
+                    writeln!(message_log_guard).map_err(Error::LogFile)?;
+                }
+                Err(e) => {
+                    // we should expect that the only thing preventing us from interfacing with the
+                    // dashboard is I/O.
+                    // Anything else is a sign of a critical logic error.
+                    assert_eq!(e.classify(), serde_json::error::Category::Io);
+                    // the connection was closed
+                    *channel_guard = None;
+                }
             }
         }
 

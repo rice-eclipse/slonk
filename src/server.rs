@@ -231,10 +231,14 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
         .ok_or(ControllerError::Args("No logs path given"))?;
 
     create_dir_all(logs_path)?;
-    let user_log = UserLog::new(file_create_new(PathBuf::from_iter([
+    let Ok(console_log_file) = file_create_new(PathBuf::from_iter([
         logs_path,
         "console.txt",
-    ]))?);
+    ])) else {
+        println!("Console log file location already exists. Please delete that file or specify a different log file path.");
+        return Err(ControllerError::Console(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "file already exists")));
+    };
+    let user_log = UserLog::new(console_log_file);
     let user_log_ref = &user_log;
     if args.len() > 2 {
         user_log.warn(
@@ -429,8 +433,16 @@ fn handle_client<'a>(
                         ))?;
                     }
                     incoming::Error::Io(e) => {
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionReset
+                        ) {
+                            // EOF means the dashboard closed the connection
+                            user_log.info("Dashboard disconnected.")?;
+                            return Ok(());
+                        }
                         user_log.warn(&format!(
-                            "Encounter I/O error while parsing message: {:?}",
+                            "Encountered I/O error while parsing message: {:?}",
                             e
                         ))?;
                     }
@@ -454,8 +466,10 @@ fn handle_client<'a>(
             }
         } else {
             // spawn thread to handle command
+            #[allow(unused_must_use)]
             thread_scope.spawn(move || {
-                handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)
+                handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state);
+                user_log.debug("Finished executing command.");
             });
         }
 
