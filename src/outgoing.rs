@@ -21,13 +21,13 @@
 
 use std::{
     io::Write,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
     time::SystemTime,
 };
 
 use serde::Serialize;
 
-use crate::{config::Configuration, ControllerError};
+use crate::config::Configuration;
 
 #[derive(Serialize)]
 #[serde(tag = "type")]
@@ -85,6 +85,15 @@ pub struct DashChannel<C: Write, M: Write> {
     message_log: Mutex<M>,
 }
 
+#[derive(Debug)]
+/// The errors which can occur when writing an outgoing message.
+pub enum Error {
+    /// We failed to write to the message log (possibly because it was deleted?)
+    LogFile(std::io::Error),
+    /// A lock was poisoned.
+    Poison,
+}
+
 impl<C: Write, M: Write> DashChannel<C, M> {
     /// Construct a new `DashChannel` with no outgoing channel.
     pub fn new(message_log: M) -> DashChannel<C, M> {
@@ -106,26 +115,37 @@ impl<C: Write, M: Write> DashChannel<C, M> {
     /// # Panics
     ///
     /// This function will panic if the current time is before the UNIX epoch.
-    pub fn send(&self, message: &Message) -> Result<(), ControllerError> {
-        let mut channel_guard = self.dash_channel.write()?;
+    pub fn send(&self, message: &Message) -> Result<(), Error> {
+        let mut channel_guard = self.dash_channel.write().map_err(|_| Error::Poison)?;
+        let mut message_log_guard = self.message_log.lock().map_err(|_| Error::Poison)?;
         if let Some(ref mut writer) = *channel_guard {
-            if serde_json::to_writer(&mut *writer, message).is_ok() {
-                // log that we sent this message to the dashboard
-                // first, mark the time
-                write!(
-                    self.message_log.lock()?,
-                    "{},",
-                    SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_nanos()
-                )?;
-                // then, the message
-                serde_json::to_writer(&mut *self.message_log.lock()?, message)?;
-                // then a trailing newline
-                writeln!(self.message_log.lock()?)?;
-            } else {
-                *channel_guard = None;
+            match serde_json::to_writer(&mut *writer, message) {
+                Ok(()) => {
+                    // log that we sent this message to the dashboard
+                    // first, mark the time
+                    write!(
+                        message_log_guard,
+                        "{},",
+                        SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap()
+                            .as_nanos()
+                    )
+                    .map_err(Error::LogFile)?;
+                    // then, the message
+                    serde_json::to_writer(&mut *message_log_guard, message)
+                        .map_err(|e| Error::LogFile(std::io::Error::from(e)))?;
+                    // then a trailing newline
+                    writeln!(message_log_guard).map_err(Error::LogFile)?;
+                }
+                Err(e) => {
+                    // we should expect that the only thing preventing us from interfacing with the
+                    // dashboard is I/O.
+                    // Anything else is a sign of a critical logic error.
+                    assert_eq!(e.classify(), serde_json::error::Category::Io);
+                    // the connection was closed
+                    *channel_guard = None;
+                }
             }
         }
 
@@ -136,8 +156,8 @@ impl<C: Write, M: Write> DashChannel<C, M> {
     ///
     /// # Errors
     ///
-    /// This function may retorn an `Err` if an internal lock is poisoned.
-    pub fn has_target(&self) -> Result<bool, ControllerError> {
+    /// This function may return an `Err` if an internal lock is poisoned.
+    pub fn has_target(&self) -> Result<bool, PoisonError<RwLockReadGuard<Option<C>>>> {
         Ok(self.dash_channel.read()?.is_some())
     }
 
@@ -145,8 +165,11 @@ impl<C: Write, M: Write> DashChannel<C, M> {
     ///
     /// # Errors
     ///
-    /// This function may retorn an `Err` if an internal lock is poisoned.
-    pub fn set_channel(&self, channel: Option<C>) -> Result<(), ControllerError> {
+    /// This function may return an `Err` if an internal lock is poisoned.
+    pub fn set_channel(
+        &self,
+        channel: Option<C>,
+    ) -> Result<(), PoisonError<RwLockWriteGuard<Option<C>>>> {
         *self.dash_channel.write()? = channel;
         Ok(())
     }

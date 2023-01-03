@@ -32,7 +32,8 @@ use crate::{
     execution::emergency_stop,
     hardware::{Adc, GpioPin},
     outgoing::{DashChannel, Message, SensorReading},
-    ControllerError, ControllerState, StateGuard,
+    state::{Guard, State},
+    ControllerError,
 };
 
 #[allow(dead_code)]
@@ -74,7 +75,7 @@ pub fn sensor_listen<'a>(
     log_files: &mut [impl Write],
     user_log: &UserLog<impl Write>,
     adcs: &[Mutex<impl Adc>],
-    state: &'a StateGuard,
+    state: &'a Guard,
     dashboard_stream: &'a DashChannel<impl Write, impl Write>,
 ) -> Result<(), ControllerError> {
     assert!(usize::from(group_id) < configuration.sensor_groups.len());
@@ -113,7 +114,7 @@ pub fn sensor_listen<'a>(
     let ignition_period = Duration::from_secs(1) / group.frequency_ignition;
     let transmission_period = Duration::from_secs(1) / group.frequency_transmission;
 
-    while state.status()? != ControllerState::Quit {
+    while state.status()? != State::Quit {
         // read from each device
         for (idx, sensor) in group.sensors.iter().enumerate() {
             let Ok(mut adc_guard) = adcs[usize::from(sensor.adc)].lock() else {
@@ -163,7 +164,7 @@ pub fn sensor_listen<'a>(
         if SystemTime::now() > last_transmission_time + transmission_period {
             if dashboard_stream.has_target()? {
                 // send message to dashboard
-                let send_result = dashboard_stream.send(&Message::SensorValue {
+                dashboard_stream.send(&Message::SensorValue {
                     group_id,
                     readings: &transmission_readings
                         .iter()
@@ -177,12 +178,7 @@ pub fn sensor_listen<'a>(
                             })
                         })
                         .collect::<Vec<_>>(),
-                });
-
-                #[allow(unused_must_use)]
-                if let Err(e) = send_result {
-                    user_log.warn(&format!("unable to transmit data to dashboard: {e:?}"));
-                }
+                })?;
             }
 
             last_transmission_time = SystemTime::now();
@@ -206,7 +202,7 @@ pub fn sensor_listen<'a>(
         // use the system state to determine how long to sleep until the next loop.
         // standby means we are sampling slowly, and anything else means we sample quickly.
         let sleep_time = match state.status()? {
-            ControllerState::Standby => standby_period,
+            State::Standby => standby_period,
             _ => ignition_period,
         };
 
@@ -235,7 +231,7 @@ pub fn sensor_listen<'a>(
 ///     with one row for every sample.
 ///     `{time}` is the number of nanoseconds since the UNIX epoch.
 /// * `state`: The overall system state.
-///     This function will only return after `State` transitions to `ControllerState::Quit`.
+///     This function will only return after `State` transitions to `State::Quit`.
 /// * `dashboard_stream`: A channel by which messages can be sent to the dashboard.
 ///
 /// # Errors
@@ -251,53 +247,48 @@ pub fn driver_status_listen(
     driver_lines: &Mutex<Vec<impl GpioPin>>,
     log_file: &mut impl Write,
     user_log: &UserLog<impl Write>,
-    state: &StateGuard,
+    state: &Guard,
     dashboard_stream: &DashChannel<impl Write, impl Write>,
 ) -> Result<(), ControllerError> {
     // the time required to sleep
     let sleep_time = Duration::from_secs(1) / configuration.frequency_status;
     let mut driver_states = vec![false; driver_lines.lock()?.len()];
-    while state.status()? != ControllerState::Quit {
+    while state.status()? != State::Quit {
         // read off the states of the drivers
         let read_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
-        let Ok(mut drivers_guard) = driver_lines.lock() else {
-            #[allow(unused_must_use)] {
+        let mut drivers_guard = driver_lines.lock().map_err(|e| {
+            #[allow(unused_must_use)]
+            {
                 user_log.critical("Unable to acquire lock over driver mutex");
             }
-            continue;
-        };
+            e
+        })?;
 
         for (driver_idx, (driver_line, state_ref)) in
             drivers_guard.iter_mut().zip(&mut driver_states).enumerate()
         {
             match driver_line.read() {
                 Ok(read_value) => *state_ref = read_value,
-                #[allow(unused_must_use)]
                 Err(e) => {
                     user_log.warn(&format!(
                         "Unable to read state of driver {driver_idx}: {e:?}"
-                    ));
+                    ))?;
                 }
             }
         }
 
         // write driver status information
-        #[allow(unused_must_use)]
-        if let Err(e) = write_driver_log(log_file, read_time, &driver_states) {
-            user_log.warn(&format!(
-                "Unable to write driver status information to log file: {e}"
-            ));
-        }
+        write_driver_log(log_file, read_time, &driver_states)?;
 
         // optionally transmit to dashboard
         dashboard_stream.send(&Message::DriverValue {
             values: &driver_states,
         })?;
 
-        drop(drivers_guard); // don't keep the drivers guard!!
+        drop(drivers_guard); // don't keep the drivers guard while we sleep!
 
         // take a nap until we are ready to send another message
         sleep(sleep_time);
@@ -434,17 +425,17 @@ mod tests {
             "drivers": [],
             "ignition_sequence": [],
             "estop_sequence": [],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": [0, 0]
+            "adc_cs": [14, 15]
         }"##;
         let adcs: Vec<Mutex<ReturnsNumber>> =
             (0..2).map(|n| Mutex::new(ReturnsNumber(n))).collect();
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
-        let state = StateGuard::new(ControllerState::Standby);
+        let state = Guard::new(State::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
         // log file of outputs
         let mut output_log = Vec::new();
@@ -478,7 +469,7 @@ mod tests {
 
             // notify the thread to die
             // hackery to make a valid state transition sequence
-            state.move_to(ControllerState::Quit).unwrap();
+            state.move_to(State::Quit).unwrap();
             println!("joining...");
 
             // collect the thread's return value
@@ -575,11 +566,11 @@ mod tests {
                     "nanos": 0
                 }
             }],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": [0]
+            "adc_cs": [14]
         }"##;
 
         let adc = Mutex::new(ReturnsNumber(100));
@@ -587,7 +578,7 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
 
-        let state = StateGuard::new(ControllerState::Standby);
+        let state = Guard::new(State::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
         let output_stream = DashChannel::<Vec<u8>, Vec<u8>>::new(Vec::new());
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
@@ -613,10 +604,10 @@ mod tests {
             sleep(Duration::from_millis(200));
 
             // check that we are currently e-stopping
-            assert_eq!(state.status().unwrap(), ControllerState::EStopping);
+            assert_eq!(state.status().unwrap(), State::EStopping);
 
             // continually attempt to kill the thread
-            while state.move_to(ControllerState::Quit).is_err() {
+            while state.move_to(State::Quit).is_err() {
                 println!("failed: {:?}", state.status().unwrap());
             }
         });

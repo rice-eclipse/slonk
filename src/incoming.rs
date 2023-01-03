@@ -45,22 +45,20 @@ pub enum Command {
 #[non_exhaustive]
 #[derive(Debug)]
 /// The ways in which parsing an incoming command can fail.
-pub enum ParseError {
-    /// The source channel closed unexpectedly.
-    SourceClosed,
+pub enum Error {
     /// The message was malformed or illegal JSON.
     /// The value inside this variant is the sequence of bytes which contained the malformed
     /// message.
-    Malformed(String),
+    Malformed(Vec<u8>),
     /// There was an I/O error in parsing the message.
     Io(std::io::Error),
 }
 
-impl From<std::io::Error> for ParseError {
+impl From<std::io::Error> for Error {
     /// Construct an `Io` variant of `ParseError`.
     /// This allows convenient use of the question mark operator `?` for bubbling up errors.
     fn from(err: std::io::Error) -> Self {
-        ParseError::Io(err)
+        Error::Io(err)
     }
 }
 
@@ -76,7 +74,7 @@ impl Command {
     /// # Panics
     ///
     /// This function will only panic in case of an internal logic error.
-    pub fn parse(src: &mut dyn Read) -> Result<Command, ParseError> {
+    pub fn parse(src: &mut dyn Read) -> Result<Command, Error> {
         let mut buffer = Vec::new();
         let mut bytes = src.bytes();
         let mut depth = 0;
@@ -85,7 +83,12 @@ impl Command {
         // whether the previous character was the escape character `\`
         let mut escaped = false;
         loop {
-            let c = bytes.next().ok_or(ParseError::SourceClosed)??;
+            let c = bytes.next().ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "require more characters to fill out JSON body",
+                )
+            })??;
             buffer.push(c);
             match c {
                 b'{' => {
@@ -98,9 +101,7 @@ impl Command {
                         if depth == 0 {
                             // prevent underflow in the case of a message starting with closing
                             // brace
-                            return Err(ParseError::Malformed(
-                                String::from_utf8_lossy(&buffer).to_string(),
-                            ));
+                            return Err(Error::Malformed(buffer));
                         }
                         depth -= 1;
                         // check if this is the end of the outermost object
@@ -117,8 +118,7 @@ impl Command {
         }
 
         let result = serde_json::from_slice(&buffer);
-        let cmd = result
-            .map_err(|_| ParseError::Malformed(String::from_utf8_lossy(&buffer).to_string()))?;
+        let cmd = result.map_err(|_| Error::Malformed(buffer))?;
 
         Ok(cmd)
     }
@@ -142,7 +142,7 @@ mod tests {
     /// Helper function to construct cursors and save some boilerplate on other tests.
     /// Creates a cursor of `message` and uses it to call `Command::parse`.
     /// Ignores the extracted time from the parser.
-    fn parse_helper(message: &str) -> Result<Command, ParseError> {
+    fn parse_helper(message: &str) -> Result<Command, Error> {
         let mut cursor = Cursor::new(message);
         Command::parse(&mut cursor)
     }
@@ -154,8 +154,10 @@ mod tests {
             "type": "GARBAGE"
         }"#;
 
-        let Err(ParseError::Malformed(s)) = parse_helper(message) else {panic!()};
-        assert_eq!(s, message);
+        let Err(Error::Malformed(s)) = parse_helper(message) else {panic!()};
+        let slice: &[u8] = message.as_ref();
+
+        assert_eq!(&s, slice);
     }
 
     #[test]

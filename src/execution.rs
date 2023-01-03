@@ -23,14 +23,37 @@ use crate::{
     console::UserLog,
     hardware::GpioPin,
     incoming::Command,
-    ControllerError, ControllerState, StateGuard,
+    state::{self, Guard, State},
 };
 use std::{
     io::Write,
-    sync::Mutex,
+    sync::{Mutex, PoisonError},
     thread::sleep,
     time::{Duration, SystemTime},
 };
+
+#[derive(Debug)]
+/// The set of possible errors that could be encountered while executing a command.
+pub enum Error {
+    /// A lock was poisoned.
+    Poison,
+    /// The command tried to actuate a driver that doesn't exist.
+    DriverOutOfBounds,
+    /// While executing a procedure, an illegal transition was attempted.
+    State(state::Error),
+}
+
+impl<T> From<PoisonError<T>> for Error {
+    fn from(_: PoisonError<T>) -> Self {
+        Error::Poison
+    }
+}
+
+impl From<state::Error> for Error {
+    fn from(value: state::Error) -> Self {
+        Error::State(value)
+    }
+}
 
 /// Execute a command and log the process of execution.
 ///
@@ -57,8 +80,8 @@ pub fn handle_command(
     user_log: &UserLog<impl Write>,
     configuration: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
-    state: &StateGuard,
-) -> Result<(), ControllerError> {
+    state: &Guard,
+) -> Result<(), Error> {
     let time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
@@ -69,13 +92,26 @@ pub fn handle_command(
     }
 
     #[allow(unused_must_use)]
-    if let Err(e) = writeln!(log_file.lock()?, "{},request,{cmd}", time.as_nanos()) {
+    if let Err(e) = writeln!(
+        log_file.lock().map_err(|_| Error::Poison)?,
+        "{},request,{cmd}",
+        time.as_nanos()
+    ) {
         user_log.warn(&format!("Unable to log command {cmd} to log file: {e:?}"));
     }
 
     match cmd {
         Command::Actuate { driver_id, value } => {
-            actuate_driver(driver_lines.lock()?.as_mut(), *driver_id, *value)?;
+            if usize::from(*driver_id) > configuration.drivers.len() {
+                // we were asked to actuate a non-existent driver
+                return Err(Error::DriverOutOfBounds);
+            }
+
+            actuate_driver(
+                driver_lines.lock().map_err(|_| Error::Poison)?.as_mut(),
+                *driver_id,
+                *value,
+            )?;
         }
         Command::Ignition => ignition(configuration, driver_lines, state)?,
         Command::EmergencyStop => {
@@ -88,7 +124,11 @@ pub fn handle_command(
         .unwrap();
 
     #[allow(unused_must_use)]
-    if let Err(e) = writeln!(log_file.lock()?, "{},finish,{cmd}", time.as_nanos()) {
+    if let Err(e) = writeln!(
+        log_file.lock().map_err(|_| Error::Poison)?,
+        "{},finish,{cmd}",
+        time.as_nanos()
+    ) {
         user_log.warn(&format!(
             "Unable to log completion of command {cmd} to log file: {e:?}"
         ));
@@ -108,15 +148,15 @@ pub fn handle_command(
 pub fn emergency_stop(
     configuration: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
-    state: &StateGuard,
-) -> Result<(), ControllerError> {
+    state: &Guard,
+) -> Result<(), Error> {
     // transition to EStop, and if it's already in EStopping, don't interfere
-    state.move_to(ControllerState::EStopping)?;
+    state.move_to(State::EStopping)?;
 
     perform_actions(driver_lines, &configuration.estop_sequence)?;
 
     // done doing the estop sequence, move back to standby
-    state.move_to(ControllerState::Standby)?;
+    state.move_to(State::Standby)?;
 
     Ok(())
 }
@@ -133,23 +173,23 @@ pub fn emergency_stop(
 fn ignition(
     configuration: &Configuration,
     driver_lines: &Mutex<Vec<impl GpioPin>>,
-    state: &StateGuard,
-) -> Result<(), ControllerError> {
-    state.move_to(ControllerState::PreIgnite)?;
+    state: &Guard,
+) -> Result<(), Error> {
+    state.move_to(State::PreIgnite)?;
     sleep(Duration::from_millis(u64::from(
         configuration.pre_ignite_time,
     )));
 
-    state.move_to(ControllerState::Ignite)?;
+    state.move_to(State::Ignite)?;
     perform_actions(driver_lines, &configuration.ignition_sequence)?;
 
-    state.move_to(ControllerState::PostIgnite)?;
+    state.move_to(State::PostIgnite)?;
     sleep(Duration::from_millis(u64::from(
         configuration.post_ignite_time,
     )));
 
     // done doing the ignition sequence, move back to standby
-    state.move_to(ControllerState::Standby)?;
+    state.move_to(State::Standby)?;
 
     Ok(())
 }
@@ -173,10 +213,10 @@ fn actuate_driver(
     driver_lines: &mut [impl GpioPin],
     driver_id: u8,
     value: bool,
-) -> Result<(), ControllerError> {
+) -> Result<(), Error> {
     driver_lines[driver_id as usize]
         .write(value)
-        .map_err(std::convert::Into::into)
+        .map_err(|_| Error::Poison)
 }
 
 /// Perform a sequence of actions, such as for emergency stopping or for
@@ -188,11 +228,13 @@ fn actuate_driver(
 fn perform_actions(
     driver_lines: &Mutex<Vec<impl GpioPin>>,
     actions: &[Action],
-) -> Result<(), ControllerError> {
+) -> Result<(), Error> {
     for action in actions {
         match action {
             Action::Actuate { driver_id, value } => {
-                driver_lines.lock()?[*driver_id as usize].write(*value)?;
+                driver_lines.lock().map_err(|_| Error::Poison)?[*driver_id as usize]
+                    .write(*value)
+                    .map_err(|_| Error::Poison)?;
             }
             Action::Sleep { duration } => sleep(*duration),
         };
@@ -229,9 +271,9 @@ mod tests {
                 }
             ],
             "estop_sequence": [],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 13,
+            "spi_clk": 14,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;
@@ -241,23 +283,23 @@ mod tests {
 
         let driver_lines: Mutex<Vec<ListenerPin>> = Mutex::new(Vec::new());
 
-        let state = StateGuard::new(ControllerState::Standby);
+        let state = Guard::new(State::Standby);
         let state_ref = &state;
 
         scope(|s| {
             s.spawn(move || ignition(&config, &driver_lines, state_ref).unwrap());
 
             sleep(Duration::from_millis(250));
-            assert_eq!(state.status().unwrap(), ControllerState::PreIgnite);
+            assert_eq!(state.status().unwrap(), State::PreIgnite);
 
             sleep(Duration::from_millis(500));
-            assert_eq!(state.status().unwrap(), ControllerState::Ignite);
+            assert_eq!(state.status().unwrap(), State::Ignite);
 
             sleep(Duration::from_millis(500));
-            assert_eq!(state.status().unwrap(), ControllerState::PostIgnite);
+            assert_eq!(state.status().unwrap(), State::PostIgnite);
 
             sleep(Duration::from_millis(500));
-            assert_eq!(state.status().unwrap(), ControllerState::Standby);
+            assert_eq!(state.status().unwrap(), State::Standby);
         });
     }
 
@@ -270,7 +312,11 @@ mod tests {
             "sensor_groups": [],
             "pre_ignite_time": 0,
             "post_ignite_time": 0,
-            "drivers": [],
+            "drivers": [{
+                "label": "OXI_FILL",
+                "pin": 21,
+                "protected": false
+            }],
             "ignition_sequence": [
                 {
                     "type": "Actuate",
@@ -284,9 +330,9 @@ mod tests {
                 }
             ],
             "estop_sequence": [],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;
@@ -294,7 +340,7 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
         let driver_lines = Mutex::new(vec![ListenerPin::new(false)]);
-        let state = StateGuard::new(ControllerState::Standby);
+        let state = Guard::new(State::Standby);
 
         ignition(&config, &driver_lines, &state).unwrap();
 
@@ -324,9 +370,9 @@ mod tests {
                     }
                 }
             ],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;
@@ -336,17 +382,17 @@ mod tests {
 
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
-        let state = StateGuard::new(ControllerState::Standby);
+        let state = Guard::new(State::Standby);
         let state_ref = &state;
 
         scope(|s| {
             s.spawn(move || emergency_stop(&config, &driver_lines, state_ref).unwrap());
 
             sleep(Duration::from_millis(250));
-            assert_eq!(state.status().unwrap(), ControllerState::EStopping);
+            assert_eq!(state.status().unwrap(), State::EStopping);
 
             sleep(Duration::from_millis(500));
-            assert_eq!(state.status().unwrap(), ControllerState::Standby);
+            assert_eq!(state.status().unwrap(), State::Standby);
         });
     }
 
@@ -373,9 +419,9 @@ mod tests {
                     "value": false
                 }
             ],
-            "spi_mosi": 0,
-            "spi_miso": 0,
-            "spi_clk": 0,
+            "spi_mosi": 11,
+            "spi_miso": 12,
+            "spi_clk": 13,
             "spi_frequency_clk": 50000,
             "adc_cs": []
         }"#;
@@ -383,7 +429,7 @@ mod tests {
         let mut cfg_cursor = Cursor::new(config);
         let config = Configuration::parse(&mut cfg_cursor).unwrap();
         let driver_lines = Mutex::new(vec![ListenerPin::new(false)]);
-        let state = StateGuard::new(ControllerState::Standby);
+        let state = Guard::new(State::Standby);
 
         emergency_stop(&config, &driver_lines, &state).unwrap();
 

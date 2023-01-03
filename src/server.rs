@@ -37,9 +37,10 @@ use crate::{
         spi::{Bus, Device},
         Adc, GpioPin, ListenerPin, Mcp3208, ReturnsNumber,
     },
-    incoming::{Command, ParseError},
+    incoming::{self, Command},
     outgoing::{DashChannel, Message},
-    ControllerError, ControllerState, StateGuard,
+    state::{Guard, State},
+    ControllerError,
 };
 
 /// A trait for functions which can create the necessary hardware for the server to run.
@@ -224,16 +225,20 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     // Use arguments to get configuration file
     let json_path = args
         .get(0)
-        .ok_or_else(|| ControllerError::Args("No configuration JSON path given".to_string()))?;
+        .ok_or(ControllerError::Args("No configuration JSON path given"))?;
     let logs_path = args
         .get(1)
-        .ok_or_else(|| ControllerError::Args("No logs path given".to_string()))?;
+        .ok_or(ControllerError::Args("No logs path given"))?;
 
     create_dir_all(logs_path)?;
-    let user_log = UserLog::new(file_create_new(PathBuf::from_iter([
+    let Ok(console_log_file) = file_create_new(PathBuf::from_iter([
         logs_path,
         "console.txt",
-    ]))?);
+    ])) else {
+        println!("Console log file location already exists. Please delete that file or specify a different log file path.");
+        return Err(ControllerError::Console(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "file already exists")));
+    };
+    let user_log = UserLog::new(console_log_file);
     let user_log_ref = &user_log;
     if args.len() > 2 {
         user_log.warn(
@@ -246,7 +251,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let config = match Configuration::parse(&mut BufReader::new(config_file)) {
         Ok(c) => c,
         Err(e) => {
-            user_log.critical(&format!("Failed to parse configuration: {:?}", e))?;
+            user_log.critical(&format!("Failed to parse configuration: {e}"))?;
             return Err(e.into());
         }
     };
@@ -297,7 +302,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
 
     user_log.debug("Successfully created log files")?;
 
-    let state = StateGuard::new(ControllerState::Standby);
+    let state = Guard::new(State::Standby);
     let state_ref = &state;
 
     user_log.debug("Now acquiring GPIO")?;
@@ -358,7 +363,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
             let mut stream = match client_res {
                 Ok(i) => i,
                 Err(e) => {
-                    user_log.warn(&format!("failed to collect incoming client: {}", e))?;
+                    user_log.warn(&format!("failed to collect incoming client: {e}"))?;
                     continue;
                 }
             };
@@ -412,7 +417,7 @@ fn handle_client<'a>(
     driver_lines: &'a Mutex<Vec<impl GpioPin + Send>>,
     cmd_log_file: &'a Mutex<impl Write + Send>,
     user_log: &'a UserLog<impl Write + Send>,
-    state: &'a StateGuard,
+    state: &'a Guard,
 ) -> Result<(), ControllerError> {
     to_dash.send(&Message::Config { config })?;
     user_log.debug("Successfully sent configuration to dashboard.")?;
@@ -421,16 +426,25 @@ fn handle_client<'a>(
             Ok(cmd) => cmd,
             Err(e) => {
                 match e {
-                    ParseError::SourceClosed => {
-                        user_log.info("Dashboard disconnected")?;
-                        return Ok(());
+                    incoming::Error::Malformed(s) => {
+                        user_log.critical(&format!(
+                            "Received malformed command: {}. Future commands will likely also be invalid",
+                            String::from_utf8_lossy(&s)
+                        ))?;
                     }
-                    ParseError::Malformed(s) => {
-                        user_log.warn(&format!("Received invalid command {}", s))?;
-                    }
-                    ParseError::Io(e) => {
-                        user_log.warn(&format!("encountered I/O error: {}", e))?;
-                        return Err(ControllerError::Io(e));
+                    incoming::Error::Io(e) => {
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionReset
+                        ) {
+                            // EOF means the dashboard closed the connection
+                            user_log.info("Dashboard disconnected.")?;
+                            return Ok(());
+                        }
+                        user_log.warn(&format!(
+                            "Encountered I/O error while parsing message: {:?}",
+                            e
+                        ))?;
                     }
                 }
                 continue;
@@ -444,11 +458,18 @@ fn handle_client<'a>(
                 value: _,
             }
         ) {
-            handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)?;
+            if let Err(e) =
+                handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)
+            {
+                user_log.critical(&format!("Encountered error while executing command: {e:?}"))?;
+                continue;
+            }
         } else {
             // spawn thread to handle command
+            #[allow(unused_must_use)]
             thread_scope.spawn(move || {
-                handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state)
+                handle_command(&cmd, cmd_log_file, user_log, config, driver_lines, state);
+                user_log.debug("Finished executing command.");
             });
         }
 
