@@ -110,7 +110,7 @@
                     "channel": 2
                 },
                 {
-                    "label": "LC2",
+                    "label": "LC4",
                     "color": "#3292FF",
                     "units": "lb",
                     "calibration_intercept": 0.34,
