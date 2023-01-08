@@ -90,33 +90,6 @@
                     "calibration_slope": 33.2,
                     "adc": 2,
                     "channel": 0
-                },
-                {
-                    "label": "LC2",
-                    "color": "#3292FF",
-                    "units": "lb",
-                    "calibration_intercept": 0.34,
-                    "calibration_slope": 33.2,
-                    "adc": 2,
-                    "channel": 1
-                },
-                {
-                    "label": "LC3",
-                    "color": "#3292FF",
-                    "units": "lb",
-                    "calibration_intercept": 0.34,
-                    "calibration_slope": 33.2,
-                    "adc": 2,
-                    "channel": 2
-                },
-                {
-                    "label": "LC4",
-                    "color": "#3292FF",
-                    "units": "lb",
-                    "calibration_intercept": 0.34,
-                    "calibration_slope": 33.2,
-                    "adc": 2,
-                    "channel": 3
                 }
             ]
         }
