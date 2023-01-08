@@ -97,32 +97,32 @@
     "drivers": [
         {
             "label": "Feedline",
-            "pin": 19,
+            "pin": 17,
             "protected": false
         },
         {
             "label": "Ox tank vent",
-            "pin": 13,
+            "pin": 27,
             "protected": false
         },
         {
             "label": "Ground vent",
-            "pin": 24,
+            "pin": 22,
             "protected": false
         },
         {
             "label": "Unused (1)",
-            "pin": 22,
+            "pin": 24,
             "protected": true
         },
         {
             "label": "Unused (2)",
-            "pin": 27,
+            "pin": 13,
             "protected": true
         },
         {
             "label": "Ignition",
-            "pin": 17,
+            "pin": 12,
             "protected": true
         }
     ],
