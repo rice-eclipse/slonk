@@ -149,7 +149,7 @@
         },
         {
             "label": "Ignition",
-            "pin": 12,
+            "pin": 23,
             "protected": false
         }
     ],
