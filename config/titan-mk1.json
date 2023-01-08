@@ -12,8 +12,8 @@
                     "label": "TC1: Oxidizer tank",
                     "color": "#FC6453",
                     "units": "°C",
-                    "calibration_intercept": 300,
-                    "calibration_slope": -0.175,
+                    "calibration_intercept": 308.4,
+                    "calibration_slope": -0.1676,
                     "adc": 0,
                     "channel": 0
                 },
@@ -38,8 +38,8 @@
                     "label": "PT1: Combustion chamber",
                     "units": "psi",
                     "color": "#EBF927",
-                    "calibration_intercept": -270,
-                    "calibration_slope": 0.417,
+                    "calibration_intercept": -250.33,
+                    "calibration_slope": 0.378,
                     "rolling_average_width": 10,
                     "adc": 1,
                     "channel": 0
@@ -48,8 +48,8 @@
                     "label": "PT2: Oxidizer feedline",
                     "units": "psi",
                     "color": "#1D8718",
-                    "calibration_intercept": 1027,
-                    "calibration_slope": -0.286,
+                    "calibration_intercept": 1020,
+                    "calibration_slope": -0.2834,
                     "rolling_average_width": 10,
                     "adc": 1,
                     "channel": 1
@@ -58,8 +58,8 @@
                     "label": "PT3: Injector",
                     "units": "psi",
                     "color": "#4104D1",
-                    "calibration_intercept": 1548,
-                    "calibration_slope": -0.415,
+                    "calibration_intercept": 1277,
+                    "calibration_slope": -0.3431,
                     "rolling_average_width": 10,
                     "adc": 1,
                     "channel": 2
@@ -68,8 +68,8 @@
                     "label": "PT4: Oxidizer tank",
                     "color": "#F9864D",
                     "units": "psi",
-                    "calibration_intercept": 1382,
-                    "calibration_slope": -0.372,
+                    "calibration_intercept": 1180,
+                    "calibration_slope": -0.3178,
                     "rolling_average_width": 10,
                     "adc": 1,
                     "channel": 3
@@ -86,8 +86,8 @@
                     "label": "Main axial cell",
                     "color": "#3292FF",
                     "units": "lb",
-                    "calibration_intercept": 0.34,
-                    "calibration_slope": 33.2,
+                    "calibration_intercept": -304.38,
+                    "calibration_slope": 0.4321,
                     "adc": 2,
                     "channel": 0
                 }
