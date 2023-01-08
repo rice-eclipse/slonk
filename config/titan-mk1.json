@@ -90,6 +90,33 @@
                     "calibration_slope": 33.2,
                     "adc": 2,
                     "channel": 0
+                },
+                {
+                    "label": "LC2",
+                    "color": "#3292FF",
+                    "units": "lb",
+                    "calibration_intercept": 0.34,
+                    "calibration_slope": 33.2,
+                    "adc": 2,
+                    "channel": 1
+                },
+                {
+                    "label": "LC3",
+                    "color": "#3292FF",
+                    "units": "lb",
+                    "calibration_intercept": 0.34,
+                    "calibration_slope": 33.2,
+                    "adc": 2,
+                    "channel": 2
+                },
+                {
+                    "label": "LC2",
+                    "color": "#3292FF",
+                    "units": "lb",
+                    "calibration_intercept": 0.34,
+                    "calibration_slope": 33.2,
+                    "adc": 2,
+                    "channel": 3
                 }
             ]
         }
@@ -123,7 +150,7 @@
         {
             "label": "Ignition",
             "pin": 12,
-            "protected": true
+            "protected": false
         }
     ],
     "pre_ignite_time": 1000,
@@ -174,8 +201,8 @@
     "spi_clk": 11,
     "spi_frequency_clk": 50000,
     "adc_cs": [
-        25,
+        7,
         8,
-        7
+        25
     ]
 }
