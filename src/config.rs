@@ -70,6 +70,8 @@ pub struct Configuration {
     /// The chip select pins for each device.
     /// For now, we assume that all ADCs are MCP3208s.
     pub adc_cs: Vec<u8>,
+    /// The GPIO pin ID of the heartbeat LED.
+    pub pin_heartbeat: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -347,7 +349,8 @@ mod tests {
             "spi_frequency_clk": 50000,
             "adc_cs": [
                 20
-            ]
+            ],
+            "pin_heartbeat": 0
         }"##;
         let config = Configuration {
             frequency_status: 10,
@@ -411,6 +414,7 @@ mod tests {
             spi_clk: 24,
             spi_frequency_clk: 50_000,
             adc_cs: vec![20],
+            pin_heartbeat: 0,
         };
 
         let mut cursor = Cursor::new(config_str);

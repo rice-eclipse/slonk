@@ -275,7 +275,8 @@ mod tests {
             "spi_miso": 13,
             "spi_clk": 14,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);
@@ -334,7 +335,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);
@@ -374,7 +376,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);
@@ -423,7 +426,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);

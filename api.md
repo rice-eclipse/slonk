@@ -44,20 +44,20 @@ and similar.
 ## Example timeline
 
 1. Controller and dashboard both start.
-  The controller begins listening for an incoming connection on its TCP server.
+   The controller begins listening for an incoming connection on its TCP server.
 
 1. User enters the IP address of the controller, and then presses "Connect to Controller" or similar
-  button on dashboard.
+   button on dashboard.
 
 1. Dashboard connects to the specified IP address for the controller.
 
 1. Controller transmits a configuration message immediately.
 
 1. Controller sends a series of status messages containing sensor data, and each is plotted on the
-  dashboard.
+   dashboard.
 
 1. User begins an ignition sequence.
-  Ignition start message is sent to controller.
+   Ignition start message is sent to controller.
 
 1. Controller completes ignition process.
 
@@ -74,7 +74,7 @@ The fields of the main configuration object are as follows:
   When a log buffer is full, its data will be flushed into a log file.
 
 - `sensor_groups` - array: A list describing each set of sensors and the threads that manage them.
-It also includes calibration information.
+  It also includes calibration information.
 
 - `pre_ignite_time` - number. The duration of the pre-ignition period in milliseconds.
   During pre-ignition, sensors log data at a high frequency, but the ignition procedure has not yet
@@ -92,6 +92,8 @@ It also includes calibration information.
 
 - `estop_sequence` - array: A list of objects describing each sequential operation to be taken
   during the shutoff sequence.
+
+- `pin_heartbeat` - number: The GPIO pin ID of the pin to be lit on and off for the heartbeat light.
 
 ### Drivers
 
@@ -129,7 +131,7 @@ following fields:
   ignition), messages will be sent on a time scale according to how often they were sampled.
 
 - `sensors` - array: The set of sensors. Each sensor will be an object containing the following
-    keys:
+  keys:
 
   - `label` - string: The unique identifier for the sensor.
     May not be shared across sensor groups.

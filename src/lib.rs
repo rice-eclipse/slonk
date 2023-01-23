@@ -25,6 +25,7 @@ mod console;
 mod data;
 mod execution;
 pub mod hardware;
+mod heartbeat;
 mod incoming;
 mod outgoing;
 pub mod server;
@@ -36,8 +37,6 @@ pub mod state;
 pub enum ControllerError {
     /// The controller failed because a lock was poisoned, likely due to a panicked thread.
     Poison,
-    /// The library `serde_json` failed to deserialize a structure because it was malformed.
-    MalformedDeserialize(serde_json::Error),
     /// There was an I/O error when writing to a log file.
     Console(std::io::Error),
     /// There was an error while writing an outgoing message to the dashboard.

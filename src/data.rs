@@ -429,7 +429,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": [14, 15]
+            "adc_cs": [14, 15],
+            "pin_heartbeat": 0
         }"##;
         let adcs: Vec<Mutex<ReturnsNumber>> =
             (0..2).map(|n| Mutex::new(ReturnsNumber(n))).collect();
@@ -570,7 +571,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": [14]
+            "adc_cs": [14],
+            "pin_heartbeat": 0
         }"##;
 
         let adc = Mutex::new(ReturnsNumber(100));
