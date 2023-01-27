@@ -471,8 +471,7 @@ fn handle_client<'a>(
                             return Ok(());
                         }
                         user_log.warn(&format!(
-                            "Encountered I/O error while parsing message: {:?}",
-                            e
+                            "Encountered I/O error while parsing message: {e:?}"
                         ))?;
                     }
                 }
