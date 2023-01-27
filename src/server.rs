@@ -317,7 +317,6 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let cmd_file_ref = &cmd_file;
 
     let mut drivers_file = file_create_new(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
-    let drivers_file_ref = &mut drivers_file;
 
     // when a client connects, the inner value of this mutex will be `Some` containing a TCP stream
     // to the dashboard
@@ -346,14 +345,14 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     user_log.debug("Now spawning sensor listener threads...")?;
 
     std::thread::scope(|s| {
-        for (group_id, mut log_file_group) in sensor_log_files.into_iter().enumerate() {
+        for (group_id, log_file_group) in sensor_log_files.iter_mut().enumerate() {
             s.spawn(move || {
                 sensor_listen(
                     s,
                     group_id as u8,
                     config_ref,
                     driver_lines_ref,
-                    &mut log_file_group,
+                    log_file_group,
                     user_log_ref,
                     adcs_ref,
                     state_ref,
@@ -362,14 +361,14 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
             });
         }
 
-        s.spawn(move || {
+        s.spawn(|| {
             driver_status_listen(
-                config_ref,
-                driver_lines_ref,
-                drivers_file_ref,
-                user_log_ref,
-                state_ref,
-                to_dash_ref,
+                &config,
+                &driver_lines,
+                &mut drivers_file,
+                &user_log,
+                &state,
+                &to_dash,
             )
         });
 
