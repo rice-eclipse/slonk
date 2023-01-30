@@ -128,33 +128,32 @@ impl MakeHardware for RaspberryPi {
         chip: &mut Self::Chip,
         bus: &'a Self::Bus,
     ) -> Result<Vec<Mutex<Self::Reader<'a>>>, ControllerError> {
-        let mut adcs = Vec::new();
-        for &cs_pin in &config.adc_cs {
-            adcs.push(Mutex::new(Mcp3208::new(Device::new(
-                bus,
-                chip.get_line(u32::from(cs_pin))?
-                    .request(LineRequestFlags::OUTPUT, 1, "slonk")?,
-            ))));
-        }
-
-        Ok(adcs)
+        config
+            .adc_cs
+            .iter()
+            .flat_map(|&pin| {
+                chip.get_line(u32::from(pin)).map(|line| {
+                    line.request(LineRequestFlags::OUTPUT, 1, "slonk")
+                        .map(|handle| Mutex::new(Mcp3208::new(Device::new(bus, handle))))
+                })
+            })
+            .map(|r| r.map_err(std::convert::Into::into))
+            .collect()
     }
 
     fn drivers(
         config: &Configuration,
         chip: &mut Self::Chip,
     ) -> Result<Vec<Self::Pin>, ControllerError> {
-        let mut lines = Vec::new();
-
-        for driver in &config.drivers {
-            lines.push(chip.get_line(u32::from(driver.pin))?.request(
-                LineRequestFlags::OUTPUT,
-                0,
-                "slonk",
-            )?);
-        }
-
-        Ok(lines)
+        config
+            .drivers
+            .iter()
+            .flat_map(|driver| {
+                chip.get_line(u32::from(driver.pin))
+                    .map(|l| l.request(LineRequestFlags::OUTPUT, 0, "slonk"))
+            })
+            .map(|r| r.map_err(std::convert::Into::into))
+            .collect()
     }
 
     fn bus(config: &Configuration, chip: &mut Self::Chip) -> Result<Self::Bus, ControllerError> {
