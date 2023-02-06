@@ -110,8 +110,8 @@
         },
         {
             "label": "Ground vent",
-            "label_actuate": "Open",
-            "label_deactuate": "Close",
+            "label_actuate": "Close",
+            "label_deactuate": "Open",
             "pin": 6,
             "protected": false
         },
