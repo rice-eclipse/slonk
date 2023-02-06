@@ -96,33 +96,45 @@
     "drivers": [
         {
             "label": "Feedline",
+            "label_actuate": "Open",
+            "label_deactuate": "Close",
             "pin": 19,
             "protected": false
         },
         {
             "label": "Ox tank vent",
+            "label_actuate": "Open",
+            "label_deactuate": "Close",
             "pin": 13,
             "protected": false
         },
         {
             "label": "Ground vent",
+            "label_actuate": "Open",
+            "label_deactuate": "Close",
             "pin": 6,
             "protected": false
         },
         {
             "label": "Unused (1)",
+            "label_actuate": "Actuate",
+            "label_deactuate": "Deactuate",
             "pin": 22,
             "protected": true
         },
         {
             "label": "Unused (2)",
+            "label_actuate": "Actuate",
+            "label_deactuate": "Deactuate",
             "pin": 27,
             "protected": true
         },
         {
             "label": "Ignition",
+            "label_actuate": "Ignite",
+            "label_deactuate": "Shufoff",
             "pin": 17,
-            "protected": false
+            "protected": true
         }
     ],
     "pre_ignite_time": 1000,

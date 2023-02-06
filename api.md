@@ -102,6 +102,14 @@ It will have the following keys:
 
 - `label` - string: A human-readable name for the driver.
 
+- `label_actuate` - string: A human-readable name describing what will happen when the driver is
+  actuated.
+  For example, this could be `Open` or `Ignite`.
+
+- `label_deactuate` - string: A human-readable name describing what will happen when the driver is
+  deactuated.
+  For example, this could be `Close` or `Shutoff`.
+
 - `pin` - int: The GPIO pin that the driver controls.
   Note that the GPIO pin is by software standards, and it is _not_ the phyiscal pinout on the
   Raspberry Pi.
@@ -236,6 +244,8 @@ However, it makes the syntax and structure of a configuration apparent.
   "drivers": [
     {
       "label": "OXI_FILL",
+      "label_actuate": "Open",
+      "label_deactuate": "Close",
       "pin": 33
     }
   ],

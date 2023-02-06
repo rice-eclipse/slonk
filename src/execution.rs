@@ -315,6 +315,8 @@ mod tests {
             "post_ignite_time": 0,
             "drivers": [{
                 "label": "OXI_FILL",
+                "label_actuate": "Open",
+                "label_deactuate": "Close",
                 "pin": 21,
                 "protected": false
             }],

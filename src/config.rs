@@ -79,6 +79,10 @@ pub struct Configuration {
 pub struct Driver {
     /// The human-readable name of the driver.
     pub label: String,
+    /// The label for the action that will be performed when the driver is turned on.
+    pub label_actuate: String,
+    /// The label for the action that will be performed when the driver is turned off.
+    pub label_deactuate: String,
     /// The pin actuated by the driver.
     pub pin: u8,
     /// Whether this driver is protected from user access.
@@ -313,6 +317,8 @@ mod tests {
             "drivers": [
                 {
                     "label": "OXI_FILL",
+                    "label_actuate": "Open",
+                    "label_deactuate": "Close",
                     "pin": 21,
                     "protected": false
                 }
@@ -389,6 +395,8 @@ mod tests {
             post_ignite_time: 5000,
             drivers: vec![Driver {
                 label: "OXI_FILL".into(),
+                label_actuate: "Open".into(),
+                label_deactuate: "Close".into(),
                 pin: 21,
                 protected: false,
             }],
