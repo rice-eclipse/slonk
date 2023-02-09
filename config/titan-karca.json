@@ -13,7 +13,7 @@
                     "color": "#FC6453",
                     "units": "°C",
                     "calibration_intercept": -250,
-                    "calibration_slope": 0.1611,
+                    "calibration_slope": 0.2441,
                     "adc": 0,
                     "channel": 0
                 },
@@ -22,7 +22,7 @@
                     "color": "#EF3B9E",
                     "units": "°C",
                     "calibration_intercept": -250,
-                    "calibration_slope": 0.1611,
+                    "calibration_slope": 0.2441,
                     "adc": 0,
                     "channel": 1
                 }
@@ -86,7 +86,7 @@
                     "color": "#3292FF",
                     "units": "lb",
                     "calibration_intercept": -304.38,
-                    "calibration_slope": 0.4321,
+                    "calibration_slope": 0.967,
                     "adc": 2,
                     "channel": 0
                 }
