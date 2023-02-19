@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::too_many_lines)]
-    fn data_written() {
+    fn data_written() -> Result<(), ControllerError> {
         // create some dummy configuration for the sensor listener thread to read
         let config = r##"{
             "frequency_status": 10,
@@ -435,7 +435,7 @@ mod tests {
         let adcs: Vec<Mutex<ReturnsNumber>> =
             (0..2).map(|n| Mutex::new(ReturnsNumber(n))).collect();
         let mut cfg_cursor = Cursor::new(config);
-        let config = Configuration::parse(&mut cfg_cursor).unwrap();
+        let config = Configuration::parse(&mut cfg_cursor)?;
         let state = Guard::new(State::Standby);
         let mut logs = vec![Cursor::new(Vec::new()); 2];
         // log file of outputs
@@ -443,9 +443,7 @@ mod tests {
         // stream of outgoing messages
         let mut output_stream_buf = Vec::new();
         let output_stream = DashChannel::<&mut Vec<u8>, &mut Vec<u8>>::new(&mut output_log);
-        output_stream
-            .set_channel(Some(&mut output_stream_buf))
-            .unwrap();
+        output_stream.set_channel(Some(&mut output_stream_buf))?;
         let driver_lines = Mutex::new(Vec::<ListenerPin>::new());
 
         // actual magic happens here
@@ -526,6 +524,8 @@ mod tests {
 
             assert_eq!(adc_readings.len(), 2);
         }
+
+        Ok(())
     }
 
     #[test]

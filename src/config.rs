@@ -72,6 +72,7 @@ pub struct Configuration {
     pub adc_cs: Vec<u8>,
     /// The GPIO pin ID of the heartbeat LED.
     pub pin_heartbeat: u8,
+    pub party_mode: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -278,7 +279,7 @@ mod tests {
     #[test]
     #[allow(clippy::too_many_lines)]
     /// Test the parsing of a full configuration string.
-    fn full_config() {
+    fn full_config() -> Result<(), Error> {
         let config_str = r##"{
             "frequency_status": 10,
             "log_buffer_size": 256,
@@ -423,9 +424,11 @@ mod tests {
             spi_frequency_clk: 50_000,
             adc_cs: vec![20],
             pin_heartbeat: 0,
+            party_mode: None,
         };
 
         let mut cursor = Cursor::new(config_str);
-        assert_eq!(config, Configuration::parse(&mut cursor).unwrap());
+        assert_eq!(config, Configuration::parse(&mut cursor)?);
+        Ok(())
     }
 }

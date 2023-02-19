@@ -95,6 +95,8 @@ The fields of the main configuration object are as follows:
 
 - `pin_heartbeat` - number: The GPIO pin ID of the pin to be lit on and off for the heartbeat light.
 
+- `party_mode` - (optional) boolean: Whether party mode should be enabled.
+
 ### Drivers
 
 Each driver is represented by an object in the `drivers` list.
