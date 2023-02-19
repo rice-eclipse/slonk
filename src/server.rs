@@ -37,6 +37,7 @@ use crate::{
         spi::{Bus, Device},
         Adc, GpioPin, ListenerPin, Mcp3208, ReturnsNumber,
     },
+    heartbeat::heartbeat,
     incoming::{self, Command},
     outgoing::{DashChannel, Message},
     state::{Guard, State},
@@ -95,6 +96,16 @@ pub trait MakeHardware {
         config: &Configuration,
         chip: &mut Self::Chip,
     ) -> Result<Vec<Self::Pin>, ControllerError>;
+
+    /// Get a the heartbeat GPIO pin from the configuration.
+    ///
+    /// # Errors
+    ///
+    /// This function may return an error if it is unable to acquire the GPIO needed.
+    fn heartbeat(
+        config: &Configuration,
+        chip: &mut Self::Chip,
+    ) -> Result<Self::Pin, ControllerError>;
 }
 
 /// A hardware maker for actually interfacing with the Raspberry Pi.
@@ -117,33 +128,32 @@ impl MakeHardware for RaspberryPi {
         chip: &mut Self::Chip,
         bus: &'a Self::Bus,
     ) -> Result<Vec<Mutex<Self::Reader<'a>>>, ControllerError> {
-        let mut adcs = Vec::new();
-        for &cs_pin in &config.adc_cs {
-            adcs.push(Mutex::new(Mcp3208::new(Device::new(
-                bus,
-                chip.get_line(u32::from(cs_pin))?
-                    .request(LineRequestFlags::OUTPUT, 1, "slonk")?,
-            ))));
-        }
-
-        Ok(adcs)
+        config
+            .adc_cs
+            .iter()
+            .flat_map(|&pin| {
+                chip.get_line(u32::from(pin)).map(|line| {
+                    line.request(LineRequestFlags::OUTPUT, 1, "slonk")
+                        .map(|handle| Mutex::new(Mcp3208::new(Device::new(bus, handle))))
+                })
+            })
+            .map(|r| r.map_err(std::convert::Into::into))
+            .collect()
     }
 
     fn drivers(
         config: &Configuration,
         chip: &mut Self::Chip,
     ) -> Result<Vec<Self::Pin>, ControllerError> {
-        let mut lines = Vec::new();
-
-        for driver in &config.drivers {
-            lines.push(chip.get_line(u32::from(driver.pin))?.request(
-                LineRequestFlags::OUTPUT,
-                0,
-                "slonk",
-            )?);
-        }
-
-        Ok(lines)
+        config
+            .drivers
+            .iter()
+            .flat_map(|driver| {
+                chip.get_line(u32::from(driver.pin))
+                    .map(|l| l.request(LineRequestFlags::OUTPUT, 0, "slonk"))
+            })
+            .map(|r| r.map_err(std::convert::Into::into))
+            .collect()
     }
 
     fn bus(config: &Configuration, chip: &mut Self::Chip) -> Result<Self::Bus, ControllerError> {
@@ -165,6 +175,17 @@ impl MakeHardware for RaspberryPi {
                 "slonk",
             )?,
         }))
+    }
+
+    fn heartbeat(
+        config: &Configuration,
+        chip: &mut Self::Chip,
+    ) -> Result<Self::Pin, ControllerError> {
+        Ok(chip.get_line(u32::from(config.pin_heartbeat))?.request(
+            LineRequestFlags::OUTPUT,
+            0,
+            "slonk",
+        )?)
     }
 }
 
@@ -205,6 +226,10 @@ impl MakeHardware for Dummy {
         Ok((0..config.drivers.len())
             .map(|_| ListenerPin::new(false))
             .collect())
+    }
+
+    fn heartbeat(_: &Configuration, _: &mut Self::Chip) -> Result<Self::Pin, ControllerError> {
+        Ok(ListenerPin::new(false))
     }
 }
 
@@ -291,7 +316,6 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let cmd_file_ref = &cmd_file;
 
     let mut drivers_file = file_create_new(PathBuf::from_iter([logs_path, "drivers.csv"]))?;
-    let drivers_file_ref = &mut drivers_file;
 
     // when a client connects, the inner value of this mutex will be `Some` containing a TCP stream
     // to the dashboard
@@ -311,6 +335,7 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let bus = M::bus(&config, &mut gpio_chip)?;
     let adcs = M::adcs(&config, &mut gpio_chip, &bus)?;
     let adcs_ref = &adcs;
+    let mut pin_heartbeat = M::heartbeat(&config, &mut gpio_chip)?;
 
     let driver_lines = Mutex::new(M::drivers(&config, &mut gpio_chip)?);
     let driver_lines_ref = &driver_lines;
@@ -319,14 +344,14 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     user_log.debug("Now spawning sensor listener threads...")?;
 
     std::thread::scope(|s| {
-        for (group_id, mut log_file_group) in sensor_log_files.into_iter().enumerate() {
+        for (group_id, log_file_group) in sensor_log_files.iter_mut().enumerate() {
             s.spawn(move || {
                 sensor_listen(
                     s,
                     group_id as u8,
                     config_ref,
                     driver_lines_ref,
-                    &mut log_file_group,
+                    log_file_group,
                     user_log_ref,
                     adcs_ref,
                     state_ref,
@@ -335,16 +360,18 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
             });
         }
 
-        s.spawn(move || {
+        s.spawn(|| {
             driver_status_listen(
-                config_ref,
-                driver_lines_ref,
-                drivers_file_ref,
-                user_log_ref,
-                state_ref,
-                to_dash_ref,
+                &config,
+                &driver_lines,
+                &mut drivers_file,
+                &user_log,
+                &state,
+                &to_dash,
             )
         });
+
+        s.spawn(|| heartbeat(&mut pin_heartbeat, state_ref));
 
         user_log.debug("Successfully spawned sensor listener threads.")?;
         user_log.debug("Opening network...")?;
@@ -442,8 +469,7 @@ fn handle_client<'a>(
                             return Ok(());
                         }
                         user_log.warn(&format!(
-                            "Encountered I/O error while parsing message: {:?}",
-                            e
+                            "Encountered I/O error while parsing message: {e:?}"
                         ))?;
                     }
                 }

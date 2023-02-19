@@ -12,8 +12,8 @@
                     "label": "TC1: Oxidizer tank",
                     "color": "#FC6453",
                     "units": "°C",
-                    "calibration_intercept": 308.4,
-                    "calibration_slope": -0.1676,
+                    "calibration_intercept": -250,
+                    "calibration_slope": 0.2441,
                     "adc": 0,
                     "channel": 0
                 },
@@ -22,7 +22,7 @@
                     "color": "#EF3B9E",
                     "units": "°C",
                     "calibration_intercept": -250,
-                    "calibration_slope": 0.1611,
+                    "calibration_slope": 0.2441,
                     "adc": 0,
                     "channel": 1
                 }
@@ -31,16 +31,17 @@
         {
             "label": "Pressure transducers",
             "frequency_standby": 5,
-            "frequency_ignition": 500,
+            "frequency_ignition": 2000,
             "frequency_transmission": 5,
             "sensors": [
                 {
                     "label": "PT1: Combustion chamber",
                     "units": "psi",
                     "color": "#EBF927",
-                    "calibration_intercept": -250.33,
-                    "calibration_slope": 0.378,
+                    "calibration_intercept": -249.8,
+                    "calibration_slope": 0.339,
                     "rolling_average_width": 10,
+                    "range": [-300, 700],
                     "adc": 1,
                     "channel": 0
                 },
@@ -48,9 +49,8 @@
                     "label": "PT2: Oxidizer feedline",
                     "units": "psi",
                     "color": "#1D8718",
-                    "calibration_intercept": 1020,
-                    "calibration_slope": -0.2834,
-                    "rolling_average_width": 10,
+                    "calibration_intercept": -249.8,
+                    "calibration_slope": 0.339,
                     "adc": 1,
                     "channel": 1
                 },
@@ -58,8 +58,8 @@
                     "label": "PT3: Injector",
                     "units": "psi",
                     "color": "#4104D1",
-                    "calibration_intercept": 1277,
-                    "calibration_slope": -0.3431,
+                    "calibration_intercept": -249.8,
+                    "calibration_slope": 0.339,
                     "rolling_average_width": 10,
                     "adc": 1,
                     "channel": 2
@@ -68,9 +68,8 @@
                     "label": "PT4: Oxidizer tank",
                     "color": "#F9864D",
                     "units": "psi",
-                    "calibration_intercept": 1180,
-                    "calibration_slope": -0.3178,
-                    "rolling_average_width": 10,
+                    "calibration_intercept": -249.8,
+                    "calibration_slope": 0.339,
                     "adc": 1,
                     "channel": 3
                 }
@@ -87,7 +86,7 @@
                     "color": "#3292FF",
                     "units": "lb",
                     "calibration_intercept": -304.38,
-                    "calibration_slope": 0.4321,
+                    "calibration_slope": 0.967,
                     "adc": 2,
                     "channel": 0
                 }
@@ -97,33 +96,31 @@
     "drivers": [
         {
             "label": "Feedline",
-            "pin": 17,
+            "label_actuate": "Open",
+            "label_deactuate": "Close",
+            "pin": 19,
             "protected": false
         },
         {
             "label": "Ox tank vent",
-            "pin": 27,
+            "label_actuate": "Open",
+            "label_deactuate": "Close",
+            "pin": 13,
             "protected": false
         },
         {
             "label": "Ground vent",
-            "pin": 22,
+            "label_actuate": "Close",
+            "label_deactuate": "Open",
+            "pin": 6,
             "protected": false
-        },
-        {
-            "label": "Unused (1)",
-            "pin": 24,
-            "protected": true
-        },
-        {
-            "label": "Unused (2)",
-            "pin": 13,
-            "protected": true
         },
         {
             "label": "Ignition",
-            "pin": 23,
-            "protected": false
+            "label_actuate": "Ignite",
+            "label_deactuate": "Shufoff",
+            "pin": 17,
+            "protected": true
         }
     ],
     "pre_ignite_time": 1000,
@@ -132,11 +129,21 @@
         {
             "type": "Actuate",
             "driver_id": 0,
+            "value": false
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 1,
+            "value": false
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 2,
             "value": true
         },
         {
             "type": "Actuate",
-            "driver_id": 5,
+            "driver_id": 3,
             "value": true
         },
         {
@@ -148,12 +155,7 @@
         },
         {
             "type": "Actuate",
-            "driver_id": 0,
-            "value": false
-        },
-        {
-            "type": "Actuate",
-            "driver_id": 5,
+            "driver_id": 3,
             "value": false
         }
     ],
@@ -165,18 +167,28 @@
         },
         {
             "type": "Actuate",
-            "driver_id": 5,
+            "driver_id": 1,
+            "value": false
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 2,
+            "value": true
+        },
+        {
+            "type": "Actuate",
+            "driver_id": 3,
             "value": false
         }
     ],
     "spi_mosi": 10,
     "spi_miso": 9,
     "spi_clk": 11,
-    "spi_frequency_clk": 50000,
+    "spi_frequency_clk": 100000,
     "adc_cs": [
         7,
         8,
         25
     ],
-    "pin_heartbeat": 6
+    "pin_heartbeat": 5
 }

@@ -275,7 +275,8 @@ mod tests {
             "spi_miso": 13,
             "spi_clk": 14,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);
@@ -314,6 +315,8 @@ mod tests {
             "post_ignite_time": 0,
             "drivers": [{
                 "label": "OXI_FILL",
+                "label_actuate": "Open",
+                "label_deactuate": "Close",
                 "pin": 21,
                 "protected": false
             }],
@@ -334,7 +337,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);
@@ -374,7 +378,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);
@@ -423,7 +428,8 @@ mod tests {
             "spi_miso": 12,
             "spi_clk": 13,
             "spi_frequency_clk": 50000,
-            "adc_cs": []
+            "adc_cs": [],
+            "pin_heartbeat": 0
         }"#;
 
         let mut cfg_cursor = Cursor::new(config);

@@ -70,6 +70,8 @@ pub struct Configuration {
     /// The chip select pins for each device.
     /// For now, we assume that all ADCs are MCP3208s.
     pub adc_cs: Vec<u8>,
+    /// The GPIO pin ID of the heartbeat LED.
+    pub pin_heartbeat: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -77,6 +79,10 @@ pub struct Configuration {
 pub struct Driver {
     /// The human-readable name of the driver.
     pub label: String,
+    /// The label for the action that will be performed when the driver is turned on.
+    pub label_actuate: String,
+    /// The label for the action that will be performed when the driver is turned off.
+    pub label_deactuate: String,
     /// The pin actuated by the driver.
     pub pin: u8,
     /// Whether this driver is protected from user access.
@@ -311,6 +317,8 @@ mod tests {
             "drivers": [
                 {
                     "label": "OXI_FILL",
+                    "label_actuate": "Open",
+                    "label_deactuate": "Close",
                     "pin": 21,
                     "protected": false
                 }
@@ -347,7 +355,8 @@ mod tests {
             "spi_frequency_clk": 50000,
             "adc_cs": [
                 20
-            ]
+            ],
+            "pin_heartbeat": 0
         }"##;
         let config = Configuration {
             frequency_status: 10,
@@ -386,6 +395,8 @@ mod tests {
             post_ignite_time: 5000,
             drivers: vec![Driver {
                 label: "OXI_FILL".into(),
+                label_actuate: "Open".into(),
+                label_deactuate: "Close".into(),
                 pin: 21,
                 protected: false,
             }],
@@ -411,6 +422,7 @@ mod tests {
             spi_clk: 24,
             spi_frequency_clk: 50_000,
             adc_cs: vec![20],
+            pin_heartbeat: 0,
         };
 
         let mut cursor = Cursor::new(config_str);
