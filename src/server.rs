@@ -17,7 +17,7 @@
 */
 
 use std::{
-    fs::{create_dir_all, File},
+    fs::{self, create_dir_all, File},
     io::{self, BufReader, Read, Write},
     net::TcpListener,
     path::{Path, PathBuf},
@@ -43,6 +43,8 @@ use crate::{
     state::{Guard, State},
     ControllerError,
 };
+
+use chrono::{TimeZone, Utc, LocalResult};
 
 /// A trait for functions which can create the necessary hardware for the server to run.
 ///
@@ -233,6 +235,30 @@ impl MakeHardware for Dummy {
     }
 }
 
+pub fn find_highest_log_number(dir_path: &Path) -> Option<u32> {
+    let mut max_number = 0;
+
+    if let Ok(entries) = fs::read_dir(dir_path) {
+        for entry in entries.flatten() {
+            if let Some(file_name) = entry.file_name().to_str() {
+                if file_name.starts_with("console_logs_") {
+                    if let Some(number_str) = file_name.trim_start_matches("console_logs_").parse::<u32>().ok() {
+                        if number_str > max_number {
+                            max_number = number_str;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if max_number > 0 {
+        Some(max_number)
+    } else {
+        None
+    }
+}
+
 #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
 /// The primary run function for the `slonk` server.
 ///
@@ -251,9 +277,22 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
     let json_path = args
         .get(0)
         .ok_or(ControllerError::Args("No configuration JSON path given"))?;
-    let logs_path = args
-        .get(1)
-        .ok_or(ControllerError::Args("No logs path given"))?;
+    let logs_directory = Path::new("../../slogs");
+    let new_log_directory;
+    if let Some(max_number) = find_highest_log_number(logs_directory) {
+        let new_log_directory_name = format!("console_logs_{:05}", max_number + 1);
+        new_log_directory = logs_directory.join(new_log_directory_name);
+
+        fs::create_dir(&new_log_directory).expect("Failed to create new log directory");
+    } else {
+        // No existing log directories found, create the first one
+        let new_log_directory_name = "console_logs_00001";
+        new_log_directory = logs_directory.join(new_log_directory_name);
+
+        fs::create_dir(&new_log_directory).expect("Failed to create new log directory");
+    }
+
+    let logs_path = new_log_directory.to_str().unwrap();
 
     create_dir_all(logs_path)?;
     let Ok(console_log_file) = file_create_new(PathBuf::from_iter([
@@ -394,6 +433,18 @@ pub fn run<M: MakeHardware>() -> Result<(), ControllerError> {
                     continue;
                 }
             };
+            let mut ts_buffer: [u8; 4] = [0; 4];
+            stream.read_exact(&mut ts_buffer)?; // The dashboard will send a timestamp after connection
+            let timestamp = u32::from_le_bytes(ts_buffer);
+            let formatted_timestamp = Utc.timestamp_opt(timestamp as i64, 0);
+            match formatted_timestamp {
+                LocalResult::Single(datetime) => {
+                    user_log.info(&format!("Connection established at: {}", datetime.format("%Y-%m-%d %H:%M:%S")))?;
+                }
+                _ => {
+                    user_log.warn("Invalid timestamp received after connecting to dash")?;
+                }
+            }
             user_log.info(&format!("Accepted client {:?}", stream.peer_addr()?))?;
             to_dash.set_channel(Some(stream.try_clone()?))?;
 
